@@ -14,6 +14,8 @@ npm install chroniko
 npm start   # http://localhost:3000/
 ```
 
+Add `?story=right` to the example's URL to see the [story beside the timeline](#story-beside-the-timeline).
+
 ## Usage
 
 The minified files can be loaded from jsDelivr without installing anything.
@@ -81,6 +83,8 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 | `maxSpan`           | `number`             | no       | 3× the data span, at least 100 years | Largest visible span in years. |
 | `onSelectionChange` | `function(events)`   | no       | N/A     | Called with the selected events in chronological order. |
 | `syncUrl`           | `boolean`            | no       | `false` | Keep the view, selection and hidden categories in the URL hash. See [Sharing](#sharing). |
+| `storyPosition`     | `'below' \| 'right'` | no       | `'below'` | Where the [story](#story-view) goes. See [Story beside the timeline](#story-beside-the-timeline). |
+| `split`             | `number`             | no       | `0.6`   | With `storyPosition: 'right'`, the timeline's share of the width, between 0 and 1 (exclusive). The story gets the rest. |
 
 ### Methods
 
@@ -114,7 +118,20 @@ Events keep their row while you pan. While a wheel, trackpad or touch zoom is in
 
 ### Story view
 
-Clicking an event toggles its selection. Selected events are listed below the timeline in chronological order. Each event appears at its start date, and an event with an `end` also gets a small "End of …" marker at its end date, showing how long it lasted (e.g. "lasted 2 years, 11 months"); clicking the marker jumps to the event's card. Durations use the coarser precision of the two dates (a year-only date gives whole years) and show at most two units. There is no year zero, so 27 BCE to 14 CE lasted 40 years. The same text is available as `formatDuration(parseDate(start), parseDate(end))`, exported alongside `parseDate` and `formatDate`. **Show on timeline** on a card calls `reveal(id)` for that event. Hovering or focusing an event, its card or its end marker highlights all three. Press Esc or **Clear all** to clear the selection.
+Clicking an event toggles its selection. Selected events are listed below the timeline (or beside it, see below) in chronological order. Each event appears at its start date, and an event with an `end` also gets a small "End of …" marker at its end date, showing how long it lasted (e.g. "lasted 2 years, 11 months"); clicking the marker jumps to the event's card. Durations use the coarser precision of the two dates (a year-only date gives whole years) and show at most two units. There is no year zero, so 27 BCE to 14 CE lasted 40 years. The same text is available as `formatDuration(parseDate(start), parseDate(end))`, exported alongside `parseDate` and `formatDate`. **Show on timeline** on a card calls `reveal(id)` for that event. Hovering or focusing an event, its card or its end marker highlights all three. Press Esc or **Clear all** to clear the selection.
+
+#### Story beside the timeline
+
+With `storyPosition: 'right'`, the toolbar and timeline take the left `split` of the width and the story takes the rest:
+
+```js
+new Chroniko('#timeline', { events, storyPosition: 'right', split: 0.6 });
+```
+
+- The timeline sticks to the top of the browser window while the page scrolls the story beside it. Scrolling over the timeline scrolls the story too, until you click the timeline. Its height is `--ck-height` (`420px` by default), as in the stacked layout.
+- If your page has a fixed header, set `--ck-sticky-top` on `.chroniko` to its height (e.g. `--ck-sticky-top: 56px`) so the timeline sticks below the header.
+- The story column is shown even when nothing is selected, with a short hint, so the first click doesn't resize the timeline.
+- When the component is 640px wide or narrower, it falls back to the stacked layout. This uses the component's own width, not the window's, so it also works in a narrow column. It relies on CSS container queries and `overflow: clip`, which all current browsers support.
 
 ### Colors
 
@@ -195,7 +212,7 @@ To theme one timeline only, use a more specific selector such as `#timeline.chro
 
 ### Theming
 
-Besides the [colors](#component-colors), you can override `--ck-height` (the timeline's height, `420px` by default) on `.chroniko`. Dark mode follows `prefers-color-scheme`. All other class names inside the component use the `ck-` prefix (e.g. `.ck-event`, `.ck-card`), so they won't clash with your page's styles.
+Besides the [colors](#component-colors), you can override `--ck-height` (the timeline's height, `420px` by default) and `--ck-sticky-top` (see [Story beside the timeline](#story-beside-the-timeline)) on `.chroniko`. Dark mode follows `prefers-color-scheme`. All other class names inside the component use the `ck-` prefix (e.g. `.ck-event`, `.ck-card`), so they won't clash with your page's styles.
 
 ## License
 

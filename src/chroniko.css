@@ -18,6 +18,7 @@
 
 .chroniko {
   --ck-height: 420px;
+  --ck-sticky-top: 0px;
   --ck-bg: #ffffff;
   --ck-surface: #f6f7f9;
   --ck-fg: #1f2328;
@@ -588,4 +589,57 @@
 
 .chroniko .ck-remove:hover {
   background: var(--ck-border);
+}
+
+/* ---- Story beside the timeline (storyPosition: 'right') ---- */
+
+/* overflow: clip (unlike hidden) doesn't make a scroll container, so the
+   timeline can stick to the page's viewport. */
+.chroniko.ck-side {
+  container: chroniko / inline-size;
+  overflow: clip;
+}
+
+.ck-side .ck-layout {
+  display: grid;
+  grid-template-columns: calc(var(--ck-split) * 100%) minmax(0, 1fr);
+}
+
+/* The page scrolls the story; the timeline stays on screen beside it. */
+.ck-side .ck-main {
+  position: sticky;
+  top: var(--ck-sticky-top);
+  align-self: start;
+  min-width: 0;
+}
+
+.ck-side .ck-story {
+  min-width: 0;
+  border-top: 0;
+  border-left: 1px solid var(--ck-border);
+}
+
+.ck-story-placeholder {
+  margin: 0;
+  color: var(--ck-muted);
+}
+
+/* Too narrow for two columns: stack like storyPosition: 'below'. */
+@container chroniko (max-width: 640px) {
+  .ck-side .ck-layout {
+    display: block;
+  }
+
+  .ck-side .ck-main {
+    position: static;
+  }
+
+  .ck-side .ck-story {
+    border-top: 1px solid var(--ck-border);
+    border-left: 0;
+  }
+
+  .ck-side .ck-story.ck-empty {
+    display: none;
+  }
 }

@@ -180,11 +180,20 @@ export class Chroniko {
    * @param {number} [options.maxSpan]  Largest visible span in years (default: 3× the data span).
    * @param {Function} [options.onSelectionChange] Called with the selected events in chronological order.
    * @param {boolean} [options.syncUrl] Keep the view, selection and hidden categories in the URL hash.
+   * @param {string} [options.storyPosition] 'below' (default) or 'right' of the timeline.
+   * @param {number} [options.split] With storyPosition 'right': the timeline's share of the width (default 0.6).
    */
   constructor(container, options = {}) {
     const el = typeof container === 'string' ? document.querySelector(container) : container;
     if (!el) throw new Error('Chroniko: container not found');
-    this.options = { minSpan: 1 / 12, colors: {}, ...options };
+    this.options = { minSpan: 1 / 12, colors: {}, storyPosition: 'below', split: 0.6, ...options };
+    const { storyPosition, split } = this.options;
+    if (storyPosition !== 'below' && storyPosition !== 'right') {
+      throw new Error(`Chroniko: storyPosition must be 'below' or 'right', got ${JSON.stringify(storyPosition)}`);
+    }
+    if (!(typeof split === 'number' && split > 0 && split < 1)) {
+      throw new Error(`Chroniko: split must be a number between 0 and 1, got ${JSON.stringify(split)}`);
+    }
     this.items = [];
     this.hidden = new Set();
     this.selected = new Set();
@@ -385,23 +394,33 @@ export class Chroniko {
   _build(el) {
     this.root = document.createElement('div');
     this.root.className = 'chroniko';
+    if (this.options.storyPosition === 'right') {
+      this.root.classList.add('ck-side');
+      this.root.style.setProperty('--ck-split', this.options.split);
+    }
+    // .ck-layout is separate from the root so the root can be the container
+    // that the side-by-side layout's narrow-width fallback queries.
     this.root.innerHTML = `
-      <div class="ck-toolbar">
-        <div class="ck-legend" role="group" aria-label="Categories"></div>
-        <div class="ck-controls">
-          <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
-          <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
-          <button type="button" data-action="fit">Fit</button>
+      <div class="ck-layout">
+        <div class="ck-main">
+          <div class="ck-toolbar">
+            <div class="ck-legend" role="group" aria-label="Categories"></div>
+            <div class="ck-controls">
+              <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
+              <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
+              <button type="button" data-action="fit">Fit</button>
+            </div>
+          </div>
+          <div class="ck-viewport" tabindex="0"
+               aria-label="Timeline. Drag or use arrow keys to pan; press + and −, Ctrl+scroll or pinch to zoom.">
+            <div class="ck-grid"></div>
+            <div class="ck-lanes"></div>
+            <div class="ck-axis"></div>
+            <div class="ck-hint" aria-hidden="true"></div>
+          </div>
         </div>
-      </div>
-      <div class="ck-viewport" tabindex="0"
-           aria-label="Timeline. Drag or use arrow keys to pan; press + and −, Ctrl+scroll or pinch to zoom.">
-        <div class="ck-grid"></div>
-        <div class="ck-lanes"></div>
-        <div class="ck-axis"></div>
-        <div class="ck-hint" aria-hidden="true"></div>
-      </div>
-      <section class="ck-story" aria-label="Selected events" hidden></section>`;
+        <section class="ck-story" aria-label="Selected events" hidden></section>
+      </div>`;
     el.append(this.root);
     this.legendEl = this.root.querySelector('.ck-legend');
     this.viewport = this.root.querySelector('.ck-viewport');
@@ -867,9 +886,13 @@ export class Chroniko {
   // list reads top to bottom as one sequence of moments.
   _renderStory() {
     const items = this.items.filter((it) => this.selected.has(it.id));
-    this.storyEl.hidden = !items.length;
+    // Beside the timeline the story column stays when empty, so the first
+    // selection doesn't narrow the timeline under the pointer.
+    const side = this.options.storyPosition === 'right';
+    this.storyEl.hidden = !items.length && !side;
+    this.storyEl.classList.toggle('ck-empty', !items.length);
     if (!items.length) {
-      this.storyEl.innerHTML = '';
+      this.storyEl.innerHTML = side ? '<p class="ck-story-placeholder">Click an event to add it here.</p>' : '';
       return;
     }
     const entries = items.map((item) => ({ item, at: item.from, isEnd: false }));

@@ -16,7 +16,7 @@
 <body>
   <main>
     <h1>Chroniko</h1>
-    <p>Drag to pan; Ctrl/⌘ + scroll or pinch to zoom. Click events to add them to the story below; click again to remove. Click a category to hide or show it. The address bar keeps your view and selection, so you can share it as a link.</p>
+    <p>Drag to pan; Ctrl/⌘ + scroll or pinch to zoom. Click events to add them to the story; click again to remove. Click a category to hide or show it. The address bar keeps your view and selection, so you can share it as a link.</p>
     <div id="timeline"></div>
   </main>
 
@@ -24,8 +24,12 @@
     import { Chroniko } from '../src/chroniko.js';
     import { events } from './events.js';
 
+    // Open with ?story=right to put the story beside the timeline.
+    const storyPosition = new URLSearchParams(location.search).get('story') === 'right' ? 'right' : 'below';
+
     window.timeline = new Chroniko('#timeline', {
       events,
+      storyPosition,
       colors: { war: '#e15759', politics: '#4e79a7', science: '#59a14f' },
       syncUrl: true,
       onSelectionChange: (events) => console.log('selection', events),
