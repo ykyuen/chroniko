@@ -71,7 +71,16 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 
 ### Options
 
-`events`, `start` / `end` (initial range), `colors` (category → color), `minSpan` / `maxSpan` (zoom limits in years), `onSelectionChange` (called with the selected events in chronological order), `syncUrl` (keep the view and selection in the URL hash; see [Sharing](#sharing)).
+| Option              | Type                 | Required | Default | Notes |
+| ------------------- | -------------------- | -------- | ------- | ----- |
+| `events`            | `object[]`           | no       | `[]`    | Array of events. See [Event fields](#event-fields). |
+| `start`             | `number \| string`   | no       | Fit all events | Start of the initial visible range. Same formats as event dates, or a fractional year. Only used if `end` is also set. |
+| `end`               | `number \| string`   | no       | Fit all events | End of the initial visible range. Only used if `start` is also set. |
+| `colors`            | `object`             | no       | `{}`    | Category → color, e.g. `{ war: '#c0392b' }`. Categories without a color get one from the built-in palette. |
+| `minSpan`           | `number`             | no       | `1/12` (one month) | Smallest visible span in years. |
+| `maxSpan`           | `number`             | no       | 3× the data span, at least 100 years | Largest visible span in years. |
+| `onSelectionChange` | `function(events)`   | no       | N/A     | Called with the selected events in chronological order. |
+| `syncUrl`           | `boolean`            | no       | `false` | Keep the view, selection and hidden categories in the URL hash. See [Sharing](#sharing). |
 
 ### Methods
 
