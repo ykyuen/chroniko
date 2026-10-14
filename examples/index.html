@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chroniko example</title>
+  <link rel="stylesheet" href="../src/chroniko.css">
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; padding: 24px 16px; font-family: system-ui, sans-serif; }
+    main { max-width: 1200px; margin: 0 auto; }
+    h1 { margin: 0 0 4px; }
+    p { margin: 0 0 16px; opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Chroniko</h1>
+    <p>Drag to pan; Ctrl/⌘ + scroll or pinch to zoom. Click events to add them to the story below; click again to remove. Click a category to hide or show it. The address bar keeps your view and selection, so you can share it as a link.</p>
+    <div id="timeline"></div>
+  </main>
+
+  <script type="module">
+    import { Chroniko } from '../src/chroniko.js';
+    import { events } from './events.js';
+
+    window.timeline = new Chroniko('#timeline', {
+      events,
+      colors: { war: '#e15759', politics: '#4e79a7', science: '#59a14f' },
+      syncUrl: true,
+      onSelectionChange: (events) => console.log('selection', events),
+    });
+  </script>
+</body>
+</html>

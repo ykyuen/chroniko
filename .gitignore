@@ -1,0 +1,17 @@
+# NodeJS
+node_modules
+npm-debug.log*
+*.tgz
+
+# windows
+Thumbs.db
+desktop.ini
+
+# mac
+.DS_Store
+.Spotlight-V100
+.Trashes
+._*
+
+# emacs
+.projectile
