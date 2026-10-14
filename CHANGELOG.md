@@ -16,6 +16,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 - The constructor throws if `storyPosition` or `split` is invalid.
 - The toolbar and timeline are now wrapped in `.ck-main`, and together with the story in `.ck-layout`. Custom CSS that relies on direct children of `.chroniko` (e.g. `.chroniko > .ck-toolbar`) needs updating.
 - The README lists the options in a table with their types, whether they're required, and their defaults.
+- Chroniko is published on npm. The README's jsDelivr links now load it from npm (`cdn.jsdelivr.net/npm/chroniko@0.1.1/...`) instead of GitHub.
 
 ## [0.1.0] - 2026-10-14
 
