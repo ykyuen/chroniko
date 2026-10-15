@@ -1,39 +1,176 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chroniko example</title>
-  <link rel="stylesheet" href="../src/chroniko.css">
-  <style>
-    :root { color-scheme: light dark; }
-    body { margin: 0; padding: 24px 16px; font-family: system-ui, sans-serif; }
-    main { max-width: 1200px; margin: 0 auto; }
-    h1 { margin: 0 0 4px; }
-    p { margin: 0 0 16px; opacity: 0.7; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Chroniko</h1>
-    <p>Drag to pan; Ctrl/⌘ + scroll or pinch to zoom. Click events to add them to the story; click again to remove. Click a category to hide or show it. The address bar keeps your view and selection, so you can share it as a link.</p>
-    <div id="timeline"></div>
-  </main>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Chroniko example</title>
+    <link rel="stylesheet" href="../src/chroniko.css">
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; padding: 24px 16px; font-family: system-ui, sans-serif; }
+      main { max-width: 1200px; margin: 0 auto; }
+      h1 { margin: 0 0 4px; }
+      p { margin: 0 0 16px; opacity: 0.7; }
+      .controls { margin: 0 0 16px; }
+      .controls label { margin-right: 6px; }
+      .controls select { font: inherit; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Chroniko</h1>
+      <p>Drag to pan; Ctrl/⌘ + scroll or pinch to zoom. Click events to add them to the story; click again to remove. Click a category to hide or show it. The address bar keeps your view and selection, so you can share it as a link.</p>
+      <div class="controls">
+        <label for="lang">Language</label>
+        <select id="lang">
+          <option value="en">English</option>
+          <option value="zh-Hant">繁體中文</option>
+          <option value="zh-Hans">简体中文</option>
+          <option value="yue">粵語</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="it">Italiano</option>
+          <option value="es">Español</option>
+          <option value="pt">Português</option>
+          <option value="pl">Polski</option>
+          <option value="nl">Nederlands</option>
+        </select>
+      </div>
+      <div id="timeline"></div>
+    </main>
 
-  <script type="module">
-    import { Chroniko } from '../src/chroniko.js';
-    import { events } from './events.js';
+    <script type="module">
+      import { Chroniko } from '../src/chroniko.js';
+      import { events } from './events.js';
 
-    // Open with ?story=right to put the story beside the timeline.
-    const storyPosition = new URLSearchParams(location.search).get('story') === 'right' ? 'right' : 'below';
+      // Open with ?story=right to put the story beside the timeline. Pick a UI
+      // language from the dropdown (or open with e.g. ?lang=zh-Hant); it also
+      // translates the category labels, but the event data stays English.
+      const params = new URLSearchParams(location.search);
+      const storyPosition = params.get('story') === 'right' ? 'right' : 'below';
+      const language = params.get('lang') ?? 'en';
 
-    window.timeline = new Chroniko('#timeline', {
-      events,
-      storyPosition,
-      colors: { war: '#e15759', politics: '#4e79a7', science: '#59a14f' },
-      syncUrl: true,
-      onSelectionChange: (events) => console.log('selection', events),
-    });
-  </script>
-</body>
+      // Changing language reloads with the new ?lang; the URL keeps the hash,
+      // so the view and selection carry over.
+      const langSelect = document.querySelector('#lang');
+      langSelect.value = language;
+      langSelect.addEventListener('change', () => {
+        const url = new URL(location.href);
+        url.searchParams.set('lang', langSelect.value);
+        location.assign(url);
+      });
+
+      const categoryLabels = {
+        'zh-Hant': {
+          war: '戰爭',
+          politics: '政治',
+          science: '科學',
+          culture: '文化',
+          disaster: '災難',
+          exploration: '探索',
+        },
+        'zh-Hans': {
+          war: '战争',
+          politics: '政治',
+          science: '科学',
+          culture: '文化',
+          disaster: '灾难',
+          exploration: '探索',
+        },
+        yue: {
+          war: '戰爭',
+          politics: '政治',
+          science: '科學',
+          culture: '文化',
+          disaster: '災難',
+          exploration: '探索',
+        },
+        ja: {
+          war: '戦争',
+          politics: '政治',
+          science: '科学',
+          culture: '文化',
+          disaster: '災害',
+          exploration: '探検',
+        },
+        ko: {
+          war: '전쟁',
+          politics: '정치',
+          science: '과학',
+          culture: '문화',
+          disaster: '재난',
+          exploration: '탐험',
+        },
+        fr: {
+          war: 'guerre',
+          politics: 'politique',
+          science: 'science',
+          culture: 'culture',
+          disaster: 'catastrophe',
+          exploration: 'exploration',
+        },
+        de: {
+          war: 'Krieg',
+          politics: 'Politik',
+          science: 'Wissenschaft',
+          culture: 'Kultur',
+          disaster: 'Katastrophe',
+          exploration: 'Erkundung',
+        },
+        it: {
+          war: 'guerra',
+          politics: 'politica',
+          science: 'scienza',
+          culture: 'cultura',
+          disaster: 'catastrofe',
+          exploration: 'esplorazione',
+        },
+        es: {
+          war: 'guerra',
+          politics: 'política',
+          science: 'ciencia',
+          culture: 'cultura',
+          disaster: 'desastre',
+          exploration: 'exploración',
+        },
+        pt: {
+          war: 'guerra',
+          politics: 'política',
+          science: 'ciência',
+          culture: 'cultura',
+          disaster: 'desastre',
+          exploration: 'exploração',
+        },
+        pl: {
+          war: 'wojna',
+          politics: 'polityka',
+          science: 'nauka',
+          culture: 'kultura',
+          disaster: 'katastrofa',
+          exploration: 'odkrycia',
+        },
+        nl: {
+          war: 'oorlog',
+          politics: 'politiek',
+          science: 'wetenschap',
+          culture: 'cultuur',
+          disaster: 'ramp',
+          exploration: 'ontdekkingen',
+        },
+      };
+
+      window.timeline = new Chroniko('#timeline', {
+        events,
+        storyPosition,
+        language,
+        ...(categoryLabels[language] && { categoryLabels: categoryLabels[language] }),
+        colors: { war: '#e15759', politics: '#4e79a7', science: '#59a14f' },
+        syncUrl: true,
+        textSizeToggle: true,
+        onSelectionChange: (events) => console.log('selection', events),
+      });
+    </script>
+  </body>
 </html>

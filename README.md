@@ -14,7 +14,7 @@ npm install chroniko
 npm start   # http://localhost:3000/
 ```
 
-Add `?story=right` to the example's URL to see the [story beside the timeline](#story-beside-the-timeline).
+Add `?story=right` to the example's URL to see the [story beside the timeline](#story-beside-the-timeline), or `?lang=ja` (any [language code](#languages)) to see the UI in another language. Both can be combined, e.g. `?story=right&lang=zh-Hant`.
 
 ## Usage
 
@@ -85,6 +85,10 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 | `syncUrl`           | `boolean`            | no       | `false` | Keep the view, selection and hidden categories in the URL hash. See [Sharing](#sharing). |
 | `storyPosition`     | `'below' \| 'right'` | no       | `'below'` | Where the [story](#story-view) goes. See [Story beside the timeline](#story-beside-the-timeline). |
 | `split`             | `number`             | no       | `0.6`   | With `storyPosition: 'right'`, the timeline's share of the width, between 0 and 1 (exclusive). The story gets the rest. |
+| `textSizeToggle`    | `boolean`            | no       | `false` | Show an **Aa** button in the toolbar that switches the event and category labels from 13px to 14px and the time axis labels from 12px to 13px. |
+| `language`          | `string`             | no       | `'en'`  | Language of the timeline's own text and dates. See [Languages](#languages). An unknown code throws. |
+| `uiText`            | `object`             | no       | N/A     | Replaces individual UI strings of the chosen language. See [Languages](#languages). |
+| `categoryLabels`    | `object`             | no       | `{}`    | Category → text shown in the legend and on cards, e.g. `{ war: '戰爭' }`. Categories without a label show their name. |
 
 ### Methods
 
@@ -118,7 +122,7 @@ Events keep their row while you pan. While a wheel, trackpad or touch zoom is in
 
 ### Story view
 
-Clicking an event toggles its selection. Selected events are listed below the timeline (or beside it, see below) in chronological order. Each event appears at its start date, and an event with an `end` also gets a small "End of …" marker at its end date, showing how long it lasted (e.g. "lasted 2 years, 11 months"); clicking the marker jumps to the event's card. Durations use the coarser precision of the two dates (a year-only date gives whole years) and show at most two units. There is no year zero, so 27 BCE to 14 CE lasted 40 years. The same text is available as `formatDuration(parseDate(start), parseDate(end))`, exported alongside `parseDate` and `formatDate`. **Show on timeline** on a card calls `reveal(id)` for that event. Hovering or focusing an event, its card or its end marker highlights all three. Press Esc or **Clear all** to clear the selection.
+Clicking an event toggles its selection. Selected events are listed below the timeline (or beside it, see below) in chronological order. Each event appears at its start date, and an event with an `end` also gets a small "End of …" marker at its end date, showing how long it lasted (e.g. "lasted 2 years, 11 months"); clicking the marker jumps to the event's card. Durations use the coarser precision of the two dates (a year-only date gives whole years) and show at most two units. There is no year zero, so 27 BCE to 14 CE lasted 40 years. The same text is available as `formatDuration(parseDate(start), parseDate(end), language)`, exported alongside `parseDate`, `formatDate(date, language)` and `formatYear(year, language)`; `language` defaults to `'en'`. **Show on timeline** on a card calls `reveal(id)` for that event. Hovering or focusing an event, its card or its end marker highlights all three. Press Esc or **Clear all** to clear the selection.
 
 #### Story beside the timeline
 
@@ -132,6 +136,36 @@ new Chroniko('#timeline', { events, storyPosition: 'right', split: 0.6 });
 - If your page has a fixed header, set `--ck-sticky-top` on `.chroniko` to its height (e.g. `--ck-sticky-top: 56px`) so the timeline sticks below the header.
 - The story column is shown even when nothing is selected, with a short hint, so the first click doesn't resize the timeline.
 - When the component is 640px wide or narrower, it falls back to the stacked layout. This uses the component's own width, not the window's, so it also works in a narrow column. It relies on CSS container queries and `overflow: clip`, which all current browsers support.
+
+### Languages
+
+Set `language` when creating the timeline to translate its own text: the toolbar, the story, screen-reader labels, and how dates and durations are written. The language is fixed for the timeline's lifetime.
+
+```js
+new Chroniko('#timeline', { events, language: 'zh-Hant' });
+```
+
+| Code      | Language | Example date | Example duration |
+| --------- | -------- | ------------ | ---------------- |
+| `en`      | English (default) | 19 Mar 1644 · 221 BCE | 3 years, 2 months |
+| `zh-Hant` | Traditional Chinese | 1644年3月19日 · 公元前221年 | 3年2個月 |
+| `zh-Hans` | Simplified Chinese | 1644年3月19日 · 公元前221年 | 3年2个月 |
+| `yue`     | Cantonese (colloquial, traditional characters) | 1644年3月19日 · 公元前221年 | 3年2個月 |
+| `ja`      | Japanese | 1644年3月19日 · 紀元前221年 | 3年2か月 |
+| `ko`      | Korean | 1644년 3월 19일 · 기원전 221년 | 3년 2개월 |
+| `fr`      | French | 19 mars 1644 · 221 av. J.-C. | 3 ans et 2 mois |
+| `de`      | German | 19. März 1644 · 221 v. Chr. | 3 Jahre, 2 Monate |
+| `it`      | Italian | 19 mar 1644 · 221 a.C. | 3 anni e 2 mesi |
+| `es`      | Spanish | 19 mar 1644 · 221 a. C. | 3 años y 2 meses |
+| `pt`      | Portuguese | 19 mar 1644 · 221 a.C. | 3 anos e 2 meses |
+| `pl`      | Polish | 19 mar 1644 · 221 p.n.e. | 3 lata, 2 miesiące |
+| `nl`      | Dutch | 19 mrt 1644 · 221 v.Chr. | 3 jaar en 2 maanden |
+
+- **Your events aren't translated.** Titles, descriptions and category names come from your data, so pass events in the reader's language. Keep the same `id`s across languages so shared links work in every language.
+- **Category names are keys.** They're used by `colors`, the URL hash and `getState()`, so translate them with `categoryLabels` rather than in the events: `{ category: 'war' }` plus `categoryLabels: { war: 'Krieg' }`.
+- The component's root gets the `lang` attribute, so screen readers use the right pronunciation and browsers use the right Chinese, Japanese or Korean character forms.
+- `uiText` replaces individual strings, e.g. `uiText: { fit: 'Show all' }`. The keys, and what each function receives, are listed in [`src/locales/en.js`](src/locales/en.js). Keys you leave out keep the language's text.
+- To add a language, copy `src/locales/en.js`, translate it, and register it in `src/locales/index.js`.
 
 ### Colors
 

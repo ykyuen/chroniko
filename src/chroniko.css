@@ -116,6 +116,11 @@
   cursor: pointer;
 }
 
+.ck-controls button[aria-pressed="true"] {
+  border-color: var(--ck-focus);
+  color: var(--ck-focus);
+}
+
 .ck-controls button:hover,
 .ck-legend-item:hover {
   border-color: var(--ck-muted);
@@ -209,6 +214,16 @@
   inset: 0 0 32px 0;
   overflow: hidden auto;
   font-weight: 500;
+}
+
+/* textSizeToggle. 14px × the 1.4 line height still fits the 22px event bar. */
+.ck-large-text .ck-lanes,
+.ck-large-text .ck-legend-item {
+  font-size: 14px;
+}
+
+.ck-large-text .ck-tick {
+  font-size: 13px; /* kept 1px below the labels, as at the default size */
 }
 
 .ck-lanes-inner {

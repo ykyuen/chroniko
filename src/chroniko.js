@@ -18,7 +18,8 @@
 // Negative years are BCE. Year zero is not skipped, so positions across the
 // BCE/CE boundary are off by one year, which is invisible at historical scales.
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+import LOCALES from './locales/index.js';
+
 const PALETTE = ['#4e79a7', '#e15759', '#59a14f', '#f28e2b', '#b07aa1', '#76b7b2', '#edc948', '#9c755f'];
 const UNIT = { year: 1, month: 1 / 12, day: 1 / 372 };
 const TICK_STEPS = [1 / 12, 1 / 4, ...[1, 10, 100, 1000, 10000, 100000].flatMap((p) => [p, 2 * p, 5 * p])];
@@ -66,7 +67,7 @@ function dateProblem(year, month, day) {
   if (day != null) {
     if (month == null) return 'a day needs a month';
     if (!(Number.isInteger(day) && day >= 1 && day <= MAX_DAYS[month - 1])) {
-      return `day must be 1–${MAX_DAYS[month - 1]} in ${MONTHS[month - 1]}`;
+      return `day must be 1–${MAX_DAYS[month - 1]} in ${LOCALES.en.months[month - 1]}`;
     }
   }
   return null;
@@ -80,14 +81,43 @@ function withValue(year, month, day) {
   return { year, month: month || null, day: day || null, precision, value };
 }
 
-export function formatYear(year) {
-  return year < 0 ? `${-year} BCE` : String(year);
+// The UI text for a language: the built-in locale over English (so a key it
+// lacks still has text), then the caller's overrides, plus the language's
+// number and plural rules. Built-in languages are cached, since the exported
+// formatters below look them up on every call.
+const messageCache = new Map();
+
+function messagesFor(language, overrides) {
+  if (!Object.hasOwn(LOCALES, language)) {
+    const valid = Object.keys(LOCALES).map((l) => `'${l}'`).join(', ');
+    throw new Error(`Chroniko: language must be one of ${valid}, got ${JSON.stringify(language)}`);
+  }
+  if (!overrides && messageCache.has(language)) return messageCache.get(language);
+  const m = {
+    ...LOCALES.en,
+    ...LOCALES[language],
+    ...overrides,
+    number: new Intl.NumberFormat(language),
+    plural: new Intl.PluralRules(language),
+  };
+  if (!overrides) messageCache.set(language, m);
+  return m;
 }
 
-export function formatDate(d) {
-  const year = formatYear(d.year);
-  if (d.day) return `${d.day} ${MONTHS[d.month - 1]} ${year}`;
-  if (d.month) return `${MONTHS[d.month - 1]} ${year}`;
+/** A year in the given language, e.g. formatYear(-221) → "221 BCE". */
+export function formatYear(year, language = 'en') {
+  return messagesFor(language).year(year);
+}
+
+/** A parseDate() result in the given language, e.g. "19 Mar 1644". */
+export function formatDate(d, language = 'en') {
+  return dateText(d, messagesFor(language));
+}
+
+function dateText(d, m) {
+  const year = m.year(d.year);
+  if (d.day) return m.day(d.day, m.months[d.month - 1], year);
+  if (d.month) return m.month(m.months[d.month - 1], year);
   return year;
 }
 
@@ -97,7 +127,11 @@ export function formatDate(d) {
  * There is no year zero: 1 BCE (year -1) is followed by 1 CE, so 27 BCE to
  * 14 CE is 40 years. Returns "" if end is before start.
  */
-export function formatDuration(start, end) {
+export function formatDuration(start, end, language = 'en') {
+  return durationText(start, end, messagesFor(language));
+}
+
+function durationText(start, end, m) {
   const astro = (y) => (y < 0 ? y + 1 : y); // 1 BCE → 0, 2 BCE → -1, …
   const precisions = [start.precision, end.precision];
   const unit = precisions.includes('year') ? 'year' : precisions.includes('month') ? 'month' : 'day';
@@ -117,10 +151,13 @@ export function formatDuration(start, end) {
   if (years < 0) return '';
   const parts = [['year', years], ['month', months], ['day', days]];
   const first = parts.findIndex(([, n]) => n > 0);
-  if (first < 0) return `less than a ${unit}`;
-  const plural = ([name, n]) => `${n.toLocaleString('en-US')} ${name}${n === 1 ? '' : 's'}`;
+  if (first < 0) return m.lessThan[unit];
+  const amount = ([name, n]) => {
+    const forms = m.units[name];
+    return (forms[m.plural.select(n)] ?? forms.other).replace('#', m.number.format(n));
+  };
   const next = parts[first + 1];
-  return next?.[1] > 0 ? `${plural(parts[first])}, ${plural(next)}` : plural(parts[first]);
+  return next?.[1] > 0 ? `${amount(parts[first])}${m.unitJoin}${amount(next)}` : amount(parts[first]);
 }
 
 // Days in a month of a proleptic Gregorian astronomical year; month 0 is the
@@ -131,9 +168,9 @@ function daysInMonth(year, month) {
   return [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
 }
 
-function formatRange(item) {
-  const start = formatDate(item.start);
-  return item.end ? `${start} – ${formatDate(item.end)}` : start;
+function rangeText(item, m) {
+  const start = dateText(item.start, m);
+  return item.end ? `${start} – ${dateText(item.end, m)}` : start;
 }
 
 // Id for an event without one: its category, lowercased with whitespace runs
@@ -157,11 +194,11 @@ function hashParams() {
   return params;
 }
 
-function tickLabel(value, step) {
-  if (step >= 1) return formatYear(Math.round(value));
+function tickLabel(value, step, m) {
+  if (step >= 1) return m.year(Math.round(value));
   const year = Math.floor(value + 1e-9);
   const month = Math.round((value - year) * 12) % 12;
-  return month === 0 ? formatYear(year) : MONTHS[month];
+  return month === 0 ? m.year(year) : m.months[month];
 }
 
 function esc(s) {
@@ -182,11 +219,24 @@ export class Chroniko {
    * @param {boolean} [options.syncUrl] Keep the view, selection and hidden categories in the URL hash.
    * @param {string} [options.storyPosition] 'below' (default) or 'right' of the timeline.
    * @param {number} [options.split] With storyPosition 'right': the timeline's share of the width (default 0.6).
+   * @param {boolean} [options.textSizeToggle] Show a toolbar button that enlarges the event, axis and category labels.
+   * @param {string} [options.language] UI language: 'en' (default), 'zh-Hant', 'zh-Hans', 'yue', 'ja', 'ko',
+   *                                    'fr', 'de', 'it', 'es', 'pt', 'pl' or 'nl'.
+   * @param {object} [options.uiText] Overrides for individual UI strings; see src/locales/en.js for the keys.
+   * @param {object} [options.categoryLabels] Category → text shown in the legend and on cards.
    */
   constructor(container, options = {}) {
     const el = typeof container === 'string' ? document.querySelector(container) : container;
     if (!el) throw new Error('Chroniko: container not found');
-    this.options = { minSpan: 1 / 12, colors: {}, storyPosition: 'below', split: 0.6, ...options };
+    this.options = {
+      minSpan: 1 / 12,
+      colors: {},
+      storyPosition: 'below',
+      split: 0.6,
+      language: 'en',
+      categoryLabels: {},
+      ...options,
+    };
     const { storyPosition, split } = this.options;
     if (storyPosition !== 'below' && storyPosition !== 'right') {
       throw new Error(`Chroniko: storyPosition must be 'below' or 'right', got ${JSON.stringify(storyPosition)}`);
@@ -194,6 +244,7 @@ export class Chroniko {
     if (!(typeof split === 'number' && split > 0 && split < 1)) {
       throw new Error(`Chroniko: split must be a number between 0 and 1, got ${JSON.stringify(split)}`);
     }
+    this.m = messagesFor(this.options.language, this.options.uiText);
     this.items = [];
     this.hidden = new Set();
     this.selected = new Set();
@@ -386,6 +437,7 @@ export class Chroniko {
     clearTimeout(this._hashTimer);
     if (this._onHashChange) window.removeEventListener('hashchange', this._onHashChange);
     this._resizeObserver.disconnect();
+    document.fonts?.removeEventListener('loadingdone', this._onFontsLoaded);
     this.root.remove();
   }
 
@@ -394,32 +446,37 @@ export class Chroniko {
   _build(el) {
     this.root = document.createElement('div');
     this.root.className = 'chroniko';
+    // Screen readers pick the pronunciation, and browsers the CJK glyph forms, from lang.
+    this.root.lang = this.options.language;
     if (this.options.storyPosition === 'right') {
       this.root.classList.add('ck-side');
       this.root.style.setProperty('--ck-split', this.options.split);
     }
+    const m = this.m;
+    const mac = /Mac|iPhone|iPad/.test(navigator.userAgentData?.platform ?? navigator.platform);
+    const ctrl = mac ? '⌘' : m.ctrlKey;
     // .ck-layout is separate from the root so the root can be the container
     // that the side-by-side layout's narrow-width fallback queries.
     this.root.innerHTML = `
       <div class="ck-layout">
         <div class="ck-main">
           <div class="ck-toolbar">
-            <div class="ck-legend" role="group" aria-label="Categories"></div>
+            <div class="ck-legend" role="group" aria-label="${esc(m.categories)}"></div>
             <div class="ck-controls">
-              <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
-              <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
-              <button type="button" data-action="fit">Fit</button>
+              <button type="button" data-action="zoom-in" aria-label="${esc(m.zoomIn)}">+</button>
+              <button type="button" data-action="zoom-out" aria-label="${esc(m.zoomOut)}">−</button>
+              <button type="button" data-action="fit">${esc(m.fit)}</button>
+              ${this.options.textSizeToggle ? `<button type="button" data-action="text-size" aria-pressed="false" aria-label="${esc(m.largerText)}">Aa</button>` : ''}
             </div>
           </div>
-          <div class="ck-viewport" tabindex="0"
-               aria-label="Timeline. Drag or use arrow keys to pan; press + and −, Ctrl+scroll or pinch to zoom.">
+          <div class="ck-viewport" tabindex="0" aria-label="${m.viewport(esc(ctrl))}">
             <div class="ck-grid"></div>
             <div class="ck-lanes"></div>
             <div class="ck-axis"></div>
             <div class="ck-hint" aria-hidden="true"></div>
           </div>
         </div>
-        <section class="ck-story" aria-label="Selected events" hidden></section>
+        <section class="ck-story" aria-label="${esc(m.selectedEvents)}" hidden></section>
       </div>`;
     el.append(this.root);
     this.legendEl = this.root.querySelector('.ck-legend');
@@ -429,8 +486,7 @@ export class Chroniko {
     this.axisEl = this.root.querySelector('.ck-axis');
     this.storyEl = this.root.querySelector('.ck-story');
     this.hintEl = this.root.querySelector('.ck-hint');
-    const mac = /Mac|iPhone|iPad/.test(navigator.userAgentData?.platform ?? navigator.platform);
-    this.hintEl.textContent = `${mac ? '⌘' : 'Ctrl'} + scroll to zoom, or click the timeline first`;
+    this.hintEl.innerHTML = m.hint(esc(ctrl));
   }
 
   _showHint() {
@@ -447,6 +503,7 @@ export class Chroniko {
       if (action === 'zoom-in') this.zoomBy(1 / 1.5);
       else if (action === 'zoom-out') this.zoomBy(1.5);
       else if (action === 'fit') this.fit();
+      else if (action === 'text-size') this._toggleTextSize(e.target.closest('button'));
     });
 
     this.legendEl.addEventListener('click', (e) => {
@@ -627,6 +684,23 @@ export class Chroniko {
 
     this._resizeObserver = new ResizeObserver(() => this._scheduleRender());
     this._resizeObserver.observe(vp);
+
+    // A web font that finishes loading after setEvents() changes label widths,
+    // so the lanes are packed again with the real font.
+    this._onFontsLoaded = () => {
+      this._measureLabels();
+      this._invalidateLayout();
+    };
+    document.fonts?.addEventListener('loadingdone', this._onFontsLoaded);
+  }
+
+  // Label widths are cached for lane packing, and a size change fires neither
+  // the ResizeObserver nor a font load, so they are measured again here.
+  _toggleTextSize(button) {
+    const large = this.root.classList.toggle('ck-large-text');
+    button.setAttribute('aria-pressed', large);
+    this._measureLabels();
+    this._invalidateLayout();
   }
 
   _setSelection(ids) {
@@ -732,11 +806,27 @@ export class Chroniko {
     return this.items.length ? [min, max] : [0, 0];
   }
 
+  // Label widths come from a canvas rather than the DOM so measuring thousands
+  // of titles stays cheap. The font is read from a probe .ck-label, so styles
+  // aimed at the label itself (not just .ck-lanes) are picked up too.
   _measureLabels() {
     const ctx = (this._ctx ??= document.createElement('canvas').getContext('2d'));
-    const cs = getComputedStyle(this.lanesEl);
-    ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    for (const it of this.items) it.labelWidth = ctx.measureText(it.event.title ?? '').width;
+    const probe = document.createElement('span');
+    probe.className = 'ck-label';
+    probe.style.visibility = 'hidden';
+    this.lanesEl.append(probe);
+    const cs = getComputedStyle(probe);
+    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    ctx.letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
+    ctx.wordSpacing = cs.wordSpacing === 'normal' ? '0px' : cs.wordSpacing;
+    const transform = cs.textTransform;
+    probe.remove();
+    for (const it of this.items) {
+      let title = it.event.title ?? '';
+      if (transform === 'uppercase') title = title.toUpperCase();
+      else if (transform === 'lowercase') title = title.toLowerCase();
+      it.labelWidth = ctx.measureText(title).width;
+    }
   }
 
   // ---- Rendering ------------------------------------------------------------
@@ -799,7 +889,7 @@ export class Chroniko {
     for (let i = Math.ceil(this.start / step); i * step <= this.end; i++) {
       const v = i * step;
       const left = x(v).toFixed(1);
-      ticks += `<span class="ck-tick" style="left:${left}px">${tickLabel(v, step)}</span>`;
+      ticks += `<span class="ck-tick" style="left:${left}px">${esc(tickLabel(v, step, this.m))}</span>`;
       lines += `<span class="ck-gridline" style="left:${left}px"></span>`;
     }
     this.axisEl.innerHTML = ticks;
@@ -839,7 +929,7 @@ export class Chroniko {
         (flash ? `;animation-delay:-${Math.round(flashAge)}ms` : '');
       const title = esc(it.event.title ?? '');
       const attrs = `type="button" class="${cls}" data-id="${esc(it.id)}" aria-pressed="${on}"
-        title="${title} · ${esc(formatRange(it))}"`;
+        title="${title} · ${esc(rangeText(it, this.m))}"`;
       html += isRange
         ? `<button ${attrs} style="${style};width:${Math.max(x2 - x1, 4).toFixed(1)}px">
              <span class="ck-label" style="left:${labelOffset.toFixed(1)}px">${title}</span></button>`
@@ -876,7 +966,7 @@ export class Chroniko {
       .map(
         (c) => `<button type="button" class="ck-legend-item" data-category="${esc(c)}"
                   aria-pressed="${!this.hidden.has(c)}" style="--ck-color:${esc(this.colorOf.get(c))}">
-                  <span class="ck-swatch"></span>${esc(c)}</button>`,
+                  <span class="ck-swatch"></span>${esc(this._categoryLabel(c))}</button>`,
       )
       .join('');
   }
@@ -892,7 +982,7 @@ export class Chroniko {
     this.storyEl.hidden = !items.length && !side;
     this.storyEl.classList.toggle('ck-empty', !items.length);
     if (!items.length) {
-      this.storyEl.innerHTML = side ? '<p class="ck-story-placeholder">Click an event to add it here.</p>' : '';
+      this.storyEl.innerHTML = side ? `<p class="ck-story-placeholder">${esc(this.m.placeholder)}</p>` : '';
       return;
     }
     const entries = items.map((item) => ({ item, at: item.from, isEnd: false }));
@@ -906,8 +996,8 @@ export class Chroniko {
     entries.sort((a, b) => a.at - b.at || b.isEnd - a.isEnd);
     this.storyEl.innerHTML = `
       <div class="ck-story-header">
-        <span class="ck-story-title">Selected events <span class="ck-count">${items.length}</span></span>
-        <button type="button" class="ck-clear">Clear all</button>
+        <span class="ck-story-title">${esc(this.m.selectedEvents)} <span class="ck-count">${this.m.number.format(items.length)}</span></span>
+        <button type="button" class="ck-clear">${esc(this.m.clearAll)}</button>
       </div>
       <ol class="ck-story-list">${entries
         .map((en) => (en.isEnd ? this._storyEnd(en.item) : this._storyCard(en.item)))
@@ -915,15 +1005,17 @@ export class Chroniko {
   }
 
   _storyEnd(item) {
+    const m = this.m;
     const title = esc(item.event.title ?? '');
-    const duration = esc(formatDuration(item.start, item.end));
+    const date = esc(dateText(item.end, m));
+    const duration = esc(durationText(item.start, item.end, m));
     return `
       <li class="ck-end" style="--ck-color:${esc(item.color)}">
         <button type="button" class="ck-end-jump${this._hoverClass(item)}" data-id="${esc(item.id)}"
-                aria-label="${title} ends ${esc(formatDate(item.end))}${duration ? `, after ${duration}` : ''}. Go to event">
-          <span class="ck-end-date">${esc(formatDate(item.end))}</span>
-          <span>End of <strong>${title}</strong></span>
-          ${duration ? `<span class="ck-end-duration">lasted ${duration}</span>` : ''}
+                aria-label="${m.endsAria(title, date, duration)}">
+          <span class="ck-end-date">${date}</span>
+          <span>${m.endOf(`<strong>${title}</strong>`)}</span>
+          ${duration ? `<span class="ck-end-duration">${m.lasted(duration)}</span>` : ''}
         </button>
       </li>`;
   }
@@ -946,21 +1038,27 @@ export class Chroniko {
       <li class="ck-card${this._hoverClass(item)}" data-id="${esc(item.id)}" tabindex="-1"
           style="--ck-color:${esc(item.color)}">
         <button type="button" class="ck-remove" data-id="${esc(item.id)}"
-                aria-label="Remove ${esc(e.title ?? '')} from selection">×</button>
+                aria-label="${this.m.remove(esc(e.title ?? ''))}">×</button>
         <div class="ck-meta">
-          ${item.category ? `<span class="ck-badge">${esc(item.category)}</span>` : ''}
-          <span>${esc(formatRange(item))}</span>
+          ${item.category ? `<span class="ck-badge">${esc(this._categoryLabel(item.category))}</span>` : ''}
+          <span>${esc(rangeText(item, this.m))}</span>
         </div>
         <h3 class="ck-title">${esc(e.title ?? '')}</h3>
         ${e.description ? `<p class="ck-description">${esc(e.description)}</p>` : ''}
         <div class="ck-card-actions">
-          <button type="button" class="ck-locate" data-id="${esc(item.id)}">Show on timeline</button>
-          ${safeUrl ? `<a class="ck-link" href="${esc(safeUrl)}" target="_blank" rel="noopener">Read more ↗</a>` : ''}
+          <button type="button" class="ck-locate" data-id="${esc(item.id)}">${esc(this.m.showOnTimeline)}</button>
+          ${safeUrl ? `<a class="ck-link" href="${esc(safeUrl)}" target="_blank" rel="noopener">${esc(this.m.readMore)}</a>` : ''}
         </div>
       </li>`;
   }
 
   _hoverClass(item) {
     return this._hoverId === item.id ? ' ck-hover' : '';
+  }
+
+  // Categories stay the keys for colors, the URL hash and getState(); only the
+  // text shown is translated.
+  _categoryLabel(category) {
+    return this.options.categoryLabels[category] ?? category;
   }
 }
