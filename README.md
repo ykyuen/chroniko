@@ -1,6 +1,11 @@
-# chroniko
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://chroniko.ykyuen.info/images/favicon-dark-180.png">
+  <img src="https://chroniko.ykyuen.info/images/favicon-light-180.png" alt="Chroniko logo">
+</picture>
 
-Render historical events on a single zoomable time axis. Plain HTML, CSS and JavaScript, with no dependencies. Here is the [demo](https://chroniko.ykyuen.info/philosophers-in-history/).
+# Chroniko
+
+Render historical events on a single zoomable time axis. Plain HTML, CSS and JavaScript, with no dependencies. Here is the [demo](https://chroniko.ykyuen.info/philosophers-in-history/?lang=en).
 
 ## Install
 
