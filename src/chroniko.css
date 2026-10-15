@@ -606,6 +606,31 @@
   background: var(--ck-border);
 }
 
+/* textSizeToggle: every story and control size goes up 1px. */
+.ck-large-text .ck-story,
+.ck-large-text .ck-controls {
+  font-size: 14px;
+}
+
+.ck-large-text .ck-count,
+.ck-large-text .ck-end-date,
+.ck-large-text .ck-end-duration,
+.ck-large-text .ck-meta {
+  font-size: 13px;
+}
+
+.ck-large-text .ck-end-jump {
+  font-size: 14px;
+}
+
+.ck-large-text .ck-title {
+  font-size: 17px;
+}
+
+.ck-large-text .ck-remove {
+  font-size: 21px;
+}
+
 /* ---- Story beside the timeline (storyPosition: 'right') ---- */
 
 /* overflow: clip (unlike hidden) doesn't make a scroll container, so the

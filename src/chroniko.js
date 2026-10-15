@@ -219,7 +219,7 @@ export class Chroniko {
    * @param {boolean} [options.syncUrl] Keep the view, selection and hidden categories in the URL hash.
    * @param {string} [options.storyPosition] 'below' (default) or 'right' of the timeline.
    * @param {number} [options.split] With storyPosition 'right': the timeline's share of the width (default 0.6).
-   * @param {boolean} [options.textSizeToggle] Show a toolbar button that enlarges the event, axis and category labels.
+   * @param {boolean} [options.textSizeToggle] Show a toolbar button that enlarges the event, axis and category labels, the story and the toolbar buttons.
    * @param {string} [options.language] UI language: 'en' (default), 'zh-Hant', 'zh-Hans', 'yue', 'ja', 'ko',
    *                                    'fr', 'de', 'it', 'es', 'pt', 'pl' or 'nl'.
    * @param {object} [options.uiText] Overrides for individual UI strings; see src/locales/en.js for the keys.

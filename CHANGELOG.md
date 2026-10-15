@@ -2,6 +2,12 @@
 
 All notable changes to Chroniko are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- `textSizeToggle` also enlarges the story and the toolbar buttons by 1px: body text from 13px to 14px, meta and dates from 12px to 13px, card titles from 16px to 17px.
+
 ## [0.2.0] - 2026-10-15
 
 ### Added
