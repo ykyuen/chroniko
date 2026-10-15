@@ -2,7 +2,7 @@
 
 All notable changes to Chroniko are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-15
 
 ### Added
 
@@ -10,7 +10,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 - `uiText` option: replaces individual UI strings of the chosen language.
 - `categoryLabels` option: text shown for each category in the legend and on cards, while the category name stays the key for colors, the URL hash and `getState()`.
 - `formatDate`, `formatDuration` and `formatYear` take an optional `language` argument (default `'en'`).
-- The example page takes `?lang=<code>`.
+- The example page has a language dropdown (also `?lang=<code>`) and shows translated category labels for every built-in language except English.
 - `textSizeToggle` option: shows an **Aa** button in the toolbar that switches the event and category labels from 13px to 14px and the time axis labels from 12px to 13px. The lanes are repacked for the new size.
 
 ### Fixed
@@ -38,6 +38,6 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - Initial release.
 
-[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.1.1...HEAD
+[0.2.0]: https://github.com/ykyuen/chroniko/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/ykyuen/chroniko/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/ykyuen/chroniko/releases/tag/0.1.0
