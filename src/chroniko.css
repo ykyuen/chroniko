@@ -617,6 +617,57 @@
   background: var(--ck-border);
 }
 
+/* Tooltips: icon buttons show their aria-label on hover or keyboard focus.
+   The root clips overflow, so the toolbar's tooltips drop below the button,
+   lined up with whichever edge keeps them inside, and the remove button's
+   sits to its left, inside the card. z-index 3 clears the viewport's ring. */
+.ck-controls button {
+  position: relative;
+}
+
+.ck-controls button[aria-label]::after,
+.chroniko .ck-remove::after {
+  content: attr(aria-label);
+  position: absolute;
+  z-index: 3;
+  width: max-content;
+  max-width: 240px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ck-fg) 85%, transparent);
+  color: var(--ck-bg);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ck-controls button[aria-label]::after {
+  top: calc(100% + 6px);
+  right: 0;
+}
+
+.ck-controls button[aria-label]:first-child::after {
+  right: auto;
+  left: 0;
+}
+
+.chroniko .ck-remove::after {
+  top: 50%;
+  right: calc(100% + 6px);
+  transform: translateY(-50%);
+}
+
+.ck-controls button[aria-label]:is(:hover, :focus-visible)::after,
+.chroniko .ck-remove:is(:hover, :focus-visible)::after {
+  opacity: 1;
+  transition-delay: 0.3s; /* no flicker while the pointer passes over */
+}
+
 /* textSizeToggle: every story and control size goes up 1px. */
 .ck-large-text .ck-story,
 .ck-large-text .ck-controls {
@@ -640,6 +691,11 @@
 
 .ck-large-text .ck-remove {
   font-size: 21px;
+}
+
+.ck-large-text .ck-controls button[aria-label]::after,
+.ck-large-text .ck-remove::after {
+  font-size: 13px;
 }
 
 /* ---- Story beside the timeline (storyPosition: 'right') ---- */

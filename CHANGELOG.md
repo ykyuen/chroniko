@@ -7,6 +7,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 ### Added
 
 - `dimToggle` option (default `true`): shows a **◐** button in the toolbar, left of the **Aa** button, that starts on. While it is on and at least one event is selected, the unselected events are dimmed; hovering or focusing one brings it part way back. Set `dimToggle: false` to remove the button and never dim.
+- The icon buttons in the toolbar (+, −, ◐, Aa) and the × on story cards show their label as a tooltip on hover or keyboard focus.
 
 ## [0.2.1] - 2026-10-15
 
