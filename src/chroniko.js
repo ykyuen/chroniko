@@ -225,6 +225,7 @@ export class Chroniko {
    *                                    'fr', 'de', 'it', 'es', 'pt', 'pl' or 'nl'.
    * @param {object} [options.uiText] Overrides for individual UI strings; see src/locales/en.js for the keys.
    * @param {object} [options.categoryLabels] Category → text shown in the legend and on cards.
+   * @param {object} [options.tagLabels] Tag → text shown in the tag bar and on cards.
    */
   constructor(container, options = {}) {
     const el = typeof container === 'string' ? document.querySelector(container) : container;
@@ -237,6 +238,7 @@ export class Chroniko {
       dimToggle: true,
       language: 'en',
       categoryLabels: {},
+      tagLabels: {},
       ...options,
     };
     const { storyPosition, split } = this.options;
@@ -1036,17 +1038,17 @@ export class Chroniko {
       .join('');
   }
 
-  // Every tag in the events, alphabetically, with how many events have it.
-  // Hidden when no event has tags.
+  // Every tag in the events, alphabetically by label, with how many events
+  // have it. Hidden when no event has tags.
   _renderTagbar() {
     const counts = new Map();
     for (const it of this.items) for (const t of it.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
-    const tags = [...counts.keys()].sort((a, b) => a.localeCompare(b, this.options.language));
+    const tags = [...counts.keys()].sort((a, b) => this._tagLabel(a).localeCompare(this._tagLabel(b), this.options.language));
     this.tagbarEl.hidden = !tags.length;
     this.tagbarEl.querySelector('.ck-count').textContent = tags.length;
     this.tagbarEl.querySelector('.ck-tags').innerHTML = tags
       .map(
-        (t) => `<li><button type="button" class="ck-tag" data-tag="${esc(t)}" aria-pressed="false">${esc(t)} <span class="ck-tag-count">${counts.get(t)}</span></button></li>`,
+        (t) => `<li><button type="button" class="ck-tag" data-tag="${esc(t)}" aria-pressed="false">${esc(this._tagLabel(t))} <span class="ck-tag-count">${counts.get(t)}</span></button></li>`,
       )
       .join('');
   }
@@ -1126,7 +1128,7 @@ export class Chroniko {
         </div>
         <h3 class="ck-title">${esc(e.title ?? '')}</h3>
         ${e.description ? `<p class="ck-description">${esc(e.description)}</p>` : ''}
-        ${item.tags.length ? `<ul class="ck-tags" aria-label="${esc(this.m.tags)}">${item.tags.map((t) => `<li><button type="button" class="ck-tag" data-tag="${esc(t)}" aria-pressed="false">${esc(t)}</button></li>`).join('')}</ul>` : ''}
+        ${item.tags.length ? `<ul class="ck-tags" aria-label="${esc(this.m.tags)}">${item.tags.map((t) => `<li><button type="button" class="ck-tag" data-tag="${esc(t)}" aria-pressed="false">${esc(this._tagLabel(t))}</button></li>`).join('')}</ul>` : ''}
         <div class="ck-card-actions">
           <button type="button" class="ck-locate" data-id="${esc(item.id)}">${esc(this.m.showOnTimeline)}</button>
           ${safeUrl ? `<a class="ck-link" href="${esc(safeUrl)}" target="_blank" rel="noopener">${esc(this.m.readMore)}</a>` : ''}
@@ -1142,5 +1144,11 @@ export class Chroniko {
   // text shown is translated.
   _categoryLabel(category) {
     return this.options.categoryLabels[category] ?? category;
+  }
+
+  // Likewise, tags stay the keys that match events to each other; only the
+  // text shown is translated.
+  _tagLabel(tag) {
+    return this.options.tagLabels[tag] ?? tag;
   }
 }

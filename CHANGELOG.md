@@ -2,6 +2,13 @@
 
 All notable changes to Chroniko are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `tagLabels` option: text shown for each tag in the tag bar and on cards, while the tag name stays the key that matches events to each other. The tag bar is sorted by label. Tags without a label show their name.
+- The example page shows translated tag labels for every built-in language except English. Its category and tag labels now live in `examples/labels.js`.
+
 ## [0.3.0] - 2026-10-19
 
 ### Added
@@ -52,6 +59,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - Initial release.
 
+[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.3.0...HEAD
 [0.3.0]: https://github.com/ykyuen/chroniko/compare/0.2.1...0.3.0
 [0.2.1]: https://github.com/ykyuen/chroniko/compare/0.2.0...0.2.1
 [0.2.0]: https://github.com/ykyuen/chroniko/compare/0.1.1...0.2.0

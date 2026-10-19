@@ -96,6 +96,7 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 | `language`          | `string`             | no       | `'en'`  | Language of the timeline's own text and dates. See [Languages](#languages). An unknown code throws. |
 | `uiText`            | `object`             | no       | N/A     | Replaces individual UI strings of the chosen language. See [Languages](#languages). |
 | `categoryLabels`    | `object`             | no       | `{}`    | Category → text shown in the legend and on cards, e.g. `{ war: '戰爭' }`. Categories without a label show their name. |
+| `tagLabels`         | `object`             | no       | `{}`    | Tag → text shown in the tag bar and on cards, e.g. `{ Egypt: '埃及' }`. The tag bar is sorted by these labels. Tags without a label show their name. |
 
 ### Methods
 
@@ -170,6 +171,7 @@ new Chroniko('#timeline', { events, language: 'zh-Hant' });
 
 - **Your events aren't translated.** Titles, descriptions and category names come from your data, so pass events in the reader's language. Keep the same `id`s across languages so shared links work in every language.
 - **Category names are keys.** They're used by `colors`, the URL hash and `getState()`, so translate them with `categoryLabels` rather than in the events: `{ category: 'war' }` plus `categoryLabels: { war: 'Krieg' }`.
+- **Tag names are keys too.** They decide which events share a tag, so keep them the same in every language and translate them with `tagLabels`: `{ tags: ['Egypt'] }` plus `tagLabels: { Egypt: 'Ägypten' }`.
 - The component's root gets the `lang` attribute, so screen readers use the right pronunciation and browsers use the right Chinese, Japanese or Korean character forms.
 - `uiText` replaces individual strings, e.g. `uiText: { fit: 'Show all' }`. The keys, and what each function receives, are listed in [`src/locales/en.js`](src/locales/en.js). Keys you leave out keep the language's text.
 - To add a language, copy `src/locales/en.js`, translate it, and register it in `src/locales/index.js`.
