@@ -273,6 +273,7 @@
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
+  transition: opacity 0.15s;
 }
 
 .ck-label {
@@ -316,6 +317,16 @@
 
 .ck-point.ck-selected .ck-dot {
   box-shadow: 0 0 0 2px var(--ck-bg), 0 0 0 4px var(--ck-color);
+}
+
+/* dimToggle: with the button on and something selected, the rest fade back.
+   Hover and focus bring an event part way back, so it can still be found. */
+.ck-dim.ck-has-selection .ck-event:not(.ck-selected) {
+  opacity: 0.2;
+}
+
+.ck-dim.ck-has-selection .ck-event:not(.ck-selected):is(:hover, :focus-visible, .ck-hover) {
+  opacity: 0.6;
 }
 
 /* Linked hover: the event's card or end marker is hovered or focused. */

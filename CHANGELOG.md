@@ -2,6 +2,12 @@
 
 All notable changes to Chroniko are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `dimToggle` option (default `true`): shows a **◐** button in the toolbar, left of the **Aa** button, that starts on. While it is on and at least one event is selected, the unselected events are dimmed; hovering or focusing one brings it part way back. Set `dimToggle: false` to remove the button and never dim.
+
 ## [0.2.1] - 2026-10-15
 
 ### Changed

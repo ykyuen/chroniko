@@ -11,6 +11,7 @@ export default {
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
   fit: 'Fit',
+  dimUnselected: 'Dim unselected events',
   largerText: 'Larger text',
   categories: 'Categories',
   ctrlKey: 'Ctrl',

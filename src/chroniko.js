@@ -219,6 +219,7 @@ export class Chroniko {
    * @param {boolean} [options.syncUrl] Keep the view, selection and hidden categories in the URL hash.
    * @param {string} [options.storyPosition] 'below' (default) or 'right' of the timeline.
    * @param {number} [options.split] With storyPosition 'right': the timeline's share of the width (default 0.6).
+   * @param {boolean} [options.dimToggle] Show a toolbar button which is ON by default and it dims unselected events while any are selected (default true).
    * @param {boolean} [options.textSizeToggle] Show a toolbar button that enlarges the event, axis and category labels, the story and the toolbar buttons.
    * @param {string} [options.language] UI language: 'en' (default), 'zh-Hant', 'zh-Hans', 'yue', 'ja', 'ko',
    *                                    'fr', 'de', 'it', 'es', 'pt', 'pl' or 'nl'.
@@ -233,6 +234,7 @@ export class Chroniko {
       colors: {},
       storyPosition: 'below',
       split: 0.6,
+      dimToggle: true,
       language: 'en',
       categoryLabels: {},
       ...options,
@@ -452,6 +454,7 @@ export class Chroniko {
       this.root.classList.add('ck-side');
       this.root.style.setProperty('--ck-split', this.options.split);
     }
+    if (this.options.dimToggle) this.root.classList.add('ck-dim');
     const m = this.m;
     const mac = /Mac|iPhone|iPad/.test(navigator.userAgentData?.platform ?? navigator.platform);
     const ctrl = mac ? '⌘' : m.ctrlKey;
@@ -466,6 +469,7 @@ export class Chroniko {
               <button type="button" data-action="zoom-in" aria-label="${esc(m.zoomIn)}">+</button>
               <button type="button" data-action="zoom-out" aria-label="${esc(m.zoomOut)}">−</button>
               <button type="button" data-action="fit">${esc(m.fit)}</button>
+              ${this.options.dimToggle ? `<button type="button" data-action="dim" aria-pressed="true" aria-label="${esc(m.dimUnselected)}">◐</button>` : ''}
               ${this.options.textSizeToggle ? `<button type="button" data-action="text-size" aria-pressed="false" aria-label="${esc(m.largerText)}">Aa</button>` : ''}
             </div>
           </div>
@@ -503,6 +507,7 @@ export class Chroniko {
       if (action === 'zoom-in') this.zoomBy(1 / 1.5);
       else if (action === 'zoom-out') this.zoomBy(1.5);
       else if (action === 'fit') this.fit();
+      else if (action === 'dim') this._toggleDim(e.target.closest('button'));
       else if (action === 'text-size') this._toggleTextSize(e.target.closest('button'));
     });
 
@@ -692,6 +697,11 @@ export class Chroniko {
       this._invalidateLayout();
     };
     document.fonts?.addEventListener('loadingdone', this._onFontsLoaded);
+  }
+
+  // Dimming applies only while something is selected; see ck-has-selection in _renderStory.
+  _toggleDim(button) {
+    button.setAttribute('aria-pressed', this.root.classList.toggle('ck-dim'));
   }
 
   // Label widths are cached for lane packing, and a size change fires neither
@@ -981,6 +991,7 @@ export class Chroniko {
     const side = this.options.storyPosition === 'right';
     this.storyEl.hidden = !items.length && !side;
     this.storyEl.classList.toggle('ck-empty', !items.length);
+    this.root.classList.toggle('ck-has-selection', items.length > 0);
     if (!items.length) {
       this.storyEl.innerHTML = side ? `<p class="ck-story-placeholder">${esc(this.m.placeholder)}</p>` : '';
       return;

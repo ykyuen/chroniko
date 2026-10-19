@@ -4,6 +4,7 @@ export default {
   zoomIn: '확대',
   zoomOut: '축소',
   fit: '전체 보기',
+  dimUnselected: '선택 안 된 항목 흐리게',
   largerText: '글자 크게',
   categories: '분류',
   ctrlKey: 'Ctrl',

@@ -4,6 +4,7 @@ export default {
   zoomIn: '放大',
   zoomOut: '缩小',
   fit: '全览',
+  dimUnselected: '淡化未选事件',
   largerText: '放大文字',
   categories: '类别',
   ctrlKey: 'Ctrl',

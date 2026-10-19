@@ -4,6 +4,7 @@ export default {
   zoomIn: '拡大',
   zoomOut: '縮小',
   fit: '全体表示',
+  dimUnselected: '選択外を暗く',
   largerText: '文字を大きく',
   categories: 'カテゴリ',
   ctrlKey: 'Ctrl',

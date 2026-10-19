@@ -5,6 +5,7 @@ export default {
   zoomIn: 'Inzoomen',
   zoomOut: 'Uitzoomen',
   fit: 'Passend maken',
+  dimUnselected: 'Niet-geselecteerde dimmen',
   largerText: 'Grotere tekst',
   categories: 'Categorieën',
   ctrlKey: 'Ctrl',

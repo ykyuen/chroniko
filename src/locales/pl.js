@@ -6,6 +6,7 @@ export default {
   zoomIn: 'Powiększ',
   zoomOut: 'Pomniejsz',
   fit: 'Dopasuj',
+  dimUnselected: 'Przyciemnij niezaznaczone',
   largerText: 'Większy tekst',
   categories: 'Kategorie',
   ctrlKey: 'Ctrl',

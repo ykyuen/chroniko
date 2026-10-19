@@ -90,6 +90,7 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 | `syncUrl`           | `boolean`            | no       | `false` | Keep the view, selection and hidden categories in the URL hash. See [Sharing](#sharing). |
 | `storyPosition`     | `'below' \| 'right'` | no       | `'below'` | Where the [story](#story-view) goes. See [Story beside the timeline](#story-beside-the-timeline). |
 | `split`             | `number`             | no       | `0.6`   | With `storyPosition: 'right'`, the timeline's share of the width, between 0 and 1 (exclusive). The story gets the rest. |
+| `dimToggle`         | `boolean`            | no       | `true`  | Show a **◐** button in the toolbar. While it is on and at least one event is selected, the unselected events are dimmed. Set to `false` to remove the button and never dim. |
 | `textSizeToggle`    | `boolean`            | no       | `false` | Show an **Aa** button in the toolbar that switches the event and category labels from 13px to 14px and the time axis labels from 12px to 13px. Text in the story and the toolbar buttons also grows by 1px. |
 | `language`          | `string`             | no       | `'en'`  | Language of the timeline's own text and dates. See [Languages](#languages). An unknown code throws. |
 | `uiText`            | `object`             | no       | N/A     | Replaces individual UI strings of the chosen language. See [Languages](#languages). |

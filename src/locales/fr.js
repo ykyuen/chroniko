@@ -5,6 +5,7 @@ export default {
   zoomIn: 'Zoom avant',
   zoomOut: 'Zoom arrière',
   fit: 'Ajuster',
+  dimUnselected: 'Atténuer les non sélectionnés',
   largerText: 'Texte plus grand',
   categories: 'Catégories',
   ctrlKey: 'Ctrl',
