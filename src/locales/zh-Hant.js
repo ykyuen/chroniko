@@ -16,6 +16,7 @@ export default {
   placeholder: '點擊事件以加入此處。',
   showOnTimeline: '在時間軸上顯示',
   readMore: '了解更多 ↗',
+  tags: '標籤',
   remove: (title) => `從已選事件中移除「${title}」`,
   endOf: (title) => `${title}結束`,
   lasted: (duration) => `歷時${duration}`,

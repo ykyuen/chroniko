@@ -24,6 +24,7 @@ export default {
   placeholder: 'Click an event to add it here.',
   showOnTimeline: 'Show on timeline',
   readMore: 'Read more ↗',
+  tags: 'Tags',
   remove: (title) => `Remove ${title} from selection`,
   endOf: (title) => `End of ${title}`,
   lasted: (duration) => `lasted ${duration}`,

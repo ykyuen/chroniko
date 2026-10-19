@@ -209,7 +209,7 @@ export class Chroniko {
   /**
    * @param {string|HTMLElement} container  Element (or selector) to render into.
    * @param {object} options
-   * @param {Array}  options.events     [{ id, title, start, end?, category?, description?, url?, color? }]
+   * @param {Array}  options.events     [{ id, title, start, end?, category?, tags?, description?, url?, color? }]
    * @param {*}      [options.start]    Initial visible range start (any parseDate input).
    * @param {*}      [options.end]      Initial visible range end. Fits all events when omitted.
    * @param {object} [options.colors]   Category → color, e.g. { war: '#c0392b' }.
@@ -291,6 +291,8 @@ export class Chroniko {
           from: start.value,
           to: end ? end.value + UNIT[end.precision] : null,
           category: event.category ?? null,
+          // A single string is one tag; blanks and repeats are dropped.
+          tags: [...new Set([event.tags ?? []].flat().map((t) => String(t).trim()).filter(Boolean))],
         };
       })
       .sort((a, b) => a.from - b.from);
@@ -324,8 +326,10 @@ export class Chroniko {
     this._dataSpan = max - min;
     this._measureLabels();
     this._renderLegend();
+    this._renderTagbar();
     this.selected = new Set(this.items.filter((it) => this.selected.has(it.id)).map((it) => it.id));
     this._renderStory();
+    this._syncTags();
     this._invalidateLayout();
   }
 
@@ -473,6 +477,10 @@ export class Chroniko {
               ${this.options.textSizeToggle ? `<button type="button" data-action="text-size" aria-pressed="false" aria-label="${esc(m.largerText)}">Aa</button>` : ''}
             </div>
           </div>
+          <details class="ck-tagbar" hidden>
+            <summary>${esc(m.tags)} <span class="ck-count"></span></summary>
+            <ul class="ck-tags" aria-label="${esc(m.tags)}"></ul>
+          </details>
           <div class="ck-viewport" tabindex="0" aria-label="${m.viewport(esc(ctrl))}">
             <div class="ck-grid"></div>
             <div class="ck-lanes"></div>
@@ -484,6 +492,7 @@ export class Chroniko {
       </div>`;
     el.append(this.root);
     this.legendEl = this.root.querySelector('.ck-legend');
+    this.tagbarEl = this.root.querySelector('.ck-tagbar');
     this.viewport = this.root.querySelector('.ck-viewport');
     this.gridEl = this.root.querySelector('.ck-grid');
     this.lanesEl = this.root.querySelector('.ck-lanes');
@@ -509,6 +518,11 @@ export class Chroniko {
       else if (action === 'fit') this.fit();
       else if (action === 'dim') this._toggleDim(e.target.closest('button'));
       else if (action === 'text-size') this._toggleTextSize(e.target.closest('button'));
+    });
+
+    this.tagbarEl.addEventListener('click', (e) => {
+      const tag = e.target.closest('.ck-tag');
+      if (tag) this._toggleTag(tag.dataset.tag, tag);
     });
 
     this.legendEl.addEventListener('click', (e) => {
@@ -681,7 +695,9 @@ export class Chroniko {
       const remove = e.target.closest('.ck-remove');
       const jump = e.target.closest('.ck-end-jump');
       const locate = e.target.closest('.ck-locate');
-      if (remove) this.deselect(remove.dataset.id);
+      const tag = e.target.closest('.ck-tag');
+      if (tag) this._toggleTag(tag.dataset.tag, tag);
+      else if (remove) this.deselect(remove.dataset.id);
       else if (jump) this._jumpToCard(jump.dataset.id);
       else if (locate) this.reveal(locate.dataset.id);
       else if (e.target.closest('.ck-clear')) this.clearSelection();
@@ -697,6 +713,44 @@ export class Chroniko {
       this._invalidateLayout();
     };
     document.fonts?.addEventListener('loadingdone', this._onFontsLoaded);
+  }
+
+  // A tag is on while every event with it is selected, and partly on while
+  // only some are. Clicking an off or partly-on tag selects them all;
+  // clicking an on tag deselects them all. The story is
+  // rebuilt, so a tag clicked on a card hands focus to the same tag on the
+  // rebuilt card, if that card is still there.
+  _toggleTag(tag, button) {
+    const tagged = new Set(this.items.filter((it) => it.tags.includes(tag)).map((it) => it.id));
+    const on = [...tagged].every((id) => this.selected.has(id));
+    const ids = on ? [...this.selected].filter((id) => !tagged.has(id)) : [...new Set([...this.selected, ...tagged])];
+    const cardId = button.closest('.ck-card')?.dataset.id;
+    const refocus = cardId != null && button === document.activeElement;
+    this._setSelection(ids);
+    if (!refocus) return;
+    const card = [...this.storyEl.querySelectorAll('.ck-card')].find((c) => c.dataset.id === cardId);
+    [...(card?.querySelectorAll('.ck-tag') ?? [])].find((b) => b.dataset.tag === tag)?.focus();
+  }
+
+  // Each tag's state: "true" when every event with it is selected, "mixed"
+  // when only some are, "false" when none are.
+  _tagStates() {
+    const seen = new Map();
+    for (const it of this.items) {
+      const sel = this.selected.has(it.id);
+      for (const t of it.tags) {
+        const s = seen.get(t) ?? { some: false, all: true };
+        s.some ||= sel;
+        s.all &&= sel;
+        seen.set(t, s);
+      }
+    }
+    return new Map([...seen].map(([t, s]) => [t, s.all ? 'true' : s.some ? 'mixed' : 'false']));
+  }
+
+  _syncTags() {
+    const states = this._tagStates();
+    for (const el of this.root.querySelectorAll('.ck-tag')) el.setAttribute('aria-pressed', states.get(el.dataset.tag) ?? 'false');
   }
 
   // Dimming applies only while something is selected; see ck-has-selection in _renderStory.
@@ -721,6 +775,7 @@ export class Chroniko {
       el.setAttribute('aria-pressed', on);
     }
     this._renderStory();
+    this._syncTags();
     this._stateChanged();
     this.options.onSelectionChange?.(this.getSelection());
   }
@@ -981,6 +1036,21 @@ export class Chroniko {
       .join('');
   }
 
+  // Every tag in the events, alphabetically, with how many events have it.
+  // Hidden when no event has tags.
+  _renderTagbar() {
+    const counts = new Map();
+    for (const it of this.items) for (const t of it.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
+    const tags = [...counts.keys()].sort((a, b) => a.localeCompare(b, this.options.language));
+    this.tagbarEl.hidden = !tags.length;
+    this.tagbarEl.querySelector('.ck-count').textContent = tags.length;
+    this.tagbarEl.querySelector('.ck-tags').innerHTML = tags
+      .map(
+        (t) => `<li><button type="button" class="ck-tag" data-tag="${esc(t)}" aria-pressed="false">${esc(t)} <span class="ck-tag-count">${counts.get(t)}</span></button></li>`,
+      )
+      .join('');
+  }
+
   // The story lists selected events in chronological order: a card at each
   // start date, plus a small end marker at each range's end date, so the
   // list reads top to bottom as one sequence of moments.
@@ -1056,6 +1126,7 @@ export class Chroniko {
         </div>
         <h3 class="ck-title">${esc(e.title ?? '')}</h3>
         ${e.description ? `<p class="ck-description">${esc(e.description)}</p>` : ''}
+        ${item.tags.length ? `<ul class="ck-tags" aria-label="${esc(this.m.tags)}">${item.tags.map((t) => `<li><button type="button" class="ck-tag" data-tag="${esc(t)}" aria-pressed="false">${esc(t)}</button></li>`).join('')}</ul>` : ''}
         <div class="ck-card-actions">
           <button type="button" class="ck-locate" data-id="${esc(item.id)}">${esc(this.m.showOnTimeline)}</button>
           ${safeUrl ? `<a class="ck-link" href="${esc(safeUrl)}" target="_blank" rel="noopener">${esc(this.m.readMore)}</a>` : ''}

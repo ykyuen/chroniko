@@ -16,6 +16,7 @@ export default {
   placeholder: '사건을 클릭하면 여기에 추가됩니다.',
   showOnTimeline: '타임라인에서 보기',
   readMore: '더 보기 ↗',
+  tags: '태그',
   remove: (title) => `선택에서 ${title} 제거`,
   endOf: (title) => `${title} 종료`,
   lasted: (duration) => `기간: ${duration}`,

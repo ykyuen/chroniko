@@ -17,6 +17,7 @@ export default {
   placeholder: '出来事をクリックするとここに追加されます。',
   showOnTimeline: 'タイムラインで表示',
   readMore: '詳しく見る ↗',
+  tags: 'タグ',
   remove: (title) => `「${title}」を選択から外す`,
   endOf: (title) => `${title}の終わり`,
   lasted: (duration) => `期間：${duration}`,

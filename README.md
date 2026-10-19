@@ -62,6 +62,7 @@ The minified files can be loaded from jsDelivr without installing anything.
 | `end`         | no       | Same formats as `start`. If set, the event is drawn as a bar. |
 | `id`          | no       | Must be unique. See [Event ids](#event-ids). |
 | `category`    | no       | Used for colors and the legend filter. |
+| `tags`        | no       | Array of strings, shown as tags on the event's card in the story. Tags are toggles with three states: a tag is on while every event with it is selected, partly on (light grey fill) while only some are, and off while none are. Clicking an off or partly-on tag adds all its events to the selection; clicking an on tag removes them all again. When any event has tags, a collapsible **Tags** bar between the toolbar and the timeline lists them all, with how many events have each; those tags are clickable too. A single string is one tag. Blank and repeated tags are dropped. |
 | `description` | no       | Shown in the detail panel. |
 | `url`         | no       | `http(s)` link shown in the detail panel. |
 | `color`       | no       | Overrides the category color. |

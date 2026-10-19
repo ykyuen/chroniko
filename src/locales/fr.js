@@ -18,6 +18,7 @@ export default {
   placeholder: 'Cliquez sur un événement pour l’ajouter ici.',
   showOnTimeline: 'Afficher sur la frise',
   readMore: 'En savoir plus ↗',
+  tags: 'Étiquettes',
   remove: (title) => `Retirer ${title} de la sélection`,
   endOf: (title) => `Fin : ${title}`,
   lasted: (duration) => `durée : ${duration}`,

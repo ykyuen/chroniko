@@ -17,6 +17,7 @@ export default {
   placeholder: 'Klicken Sie auf ein Ereignis, um es hier hinzuzufügen.',
   showOnTimeline: 'Auf der Zeitleiste anzeigen',
   readMore: 'Mehr erfahren ↗',
+  tags: 'Schlagwörter',
   remove: (title) => `${title} aus der Auswahl entfernen`,
   endOf: (title) => `Ende: ${title}`,
   lasted: (duration) => `Dauer: ${duration}`,

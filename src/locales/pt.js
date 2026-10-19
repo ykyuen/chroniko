@@ -18,6 +18,7 @@ export default {
   placeholder: 'Clique num evento para adicioná-lo aqui.',
   showOnTimeline: 'Mostrar na linha do tempo',
   readMore: 'Saiba mais ↗',
+  tags: 'Etiquetas',
   remove: (title) => `Remover ${title} da seleção`,
   endOf: (title) => `Fim: ${title}`,
   lasted: (duration) => `duração: ${duration}`,

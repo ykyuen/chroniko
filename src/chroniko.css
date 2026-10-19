@@ -126,6 +126,37 @@
   border-color: var(--ck-muted);
 }
 
+/* ---- Tag bar: every tag, collapsed by default ---- */
+
+.ck-tagbar {
+  padding: 6px 12px;
+  background: var(--ck-surface);
+  border-bottom: 1px solid var(--ck-border);
+}
+
+.ck-tagbar summary {
+  width: max-content;
+  color: var(--ck-muted);
+  cursor: pointer;
+}
+
+.ck-tagbar summary:hover {
+  color: var(--ck-fg);
+}
+
+.ck-tagbar .ck-tags {
+  margin-bottom: 2px;
+}
+
+.ck-tag-count {
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-large-text .ck-tagbar summary {
+  font-size: 14px;
+}
+
 /* ---- Viewport ---- */
 
 .ck-viewport {
@@ -569,6 +600,43 @@
   max-width: 70ch;
 }
 
+.ck-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chroniko .ck-tag {
+  padding: 0 8px;
+  background: none;
+  border: 1px solid var(--ck-border);
+  border-radius: 999px;
+  color: var(--ck-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chroniko .ck-tag:hover {
+  border-color: var(--ck-muted);
+  color: var(--ck-fg);
+}
+
+.chroniko .ck-tag[aria-pressed="true"] {
+  background: var(--ck-fg);
+  border-color: var(--ck-fg);
+  color: var(--ck-bg);
+}
+
+/* Some, not all, of the tag's events are selected. */
+.chroniko .ck-tag[aria-pressed="mixed"] {
+  background: color-mix(in srgb, var(--ck-fg) 12%, transparent);
+  border-color: var(--ck-muted);
+  color: var(--ck-fg);
+}
+
 .ck-card.ck-hover {
   border-color: color-mix(in srgb, var(--ck-color) 60%, var(--ck-border));
   border-left-color: var(--ck-color);
@@ -677,7 +745,8 @@
 .ck-large-text .ck-count,
 .ck-large-text .ck-end-date,
 .ck-large-text .ck-end-duration,
-.ck-large-text .ck-meta {
+.ck-large-text .ck-meta,
+.ck-large-text .ck-tag {
   font-size: 13px;
 }
 

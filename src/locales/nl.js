@@ -18,6 +18,7 @@ export default {
   placeholder: 'Klik op een gebeurtenis om die hier toe te voegen.',
   showOnTimeline: 'Tonen op tijdlijn',
   readMore: 'Meer lezen ↗',
+  tags: 'Tags',
   remove: (title) => `${title} uit selectie verwijderen`,
   endOf: (title) => `Einde: ${title}`,
   lasted: (duration) => `duur: ${duration}`,

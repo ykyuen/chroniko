@@ -19,6 +19,7 @@ export default {
   placeholder: 'Kliknij wydarzenie, aby dodać je tutaj.',
   showOnTimeline: 'Pokaż na osi czasu',
   readMore: 'Więcej ↗',
+  tags: 'Tagi',
   remove: (title) => `Usuń ${title} z wyboru`,
   endOf: (title) => `Koniec: ${title}`,
   lasted: (duration) => `czas trwania: ${duration}`,

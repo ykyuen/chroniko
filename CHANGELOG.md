@@ -7,6 +7,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 ### Added
 
 - `dimToggle` option (default `true`): shows a **◐** button in the toolbar, left of the **Aa** button, that starts on. While it is on and at least one event is selected, the unselected events are dimmed; hovering or focusing one brings it part way back. Set `dimToggle: false` to remove the button and never dim.
+- `tags` event field: an array of strings shown as tags under the description on the event's card in the story. Tags are toggles with three states: a tag is on (solid dark fill, `aria-pressed="true"`) while every event with it is selected, partly on (light grey fill, `aria-pressed="mixed"`) while only some are, and off (`aria-pressed="false"`) while none are. Clicking an off or partly-on tag adds all its events to the selection; clicking an on tag removes them all, even ones that also have another tag. When any event has tags, a collapsible **Tags** bar between the toolbar and the timeline (collapsed at first) lists every tag alphabetically with its event count, and those tags are clickable the same way. A single string is one tag; blank and repeated tags are dropped. A new UI string, `tags`, is translated for every built-in language.
 - The icon buttons in the toolbar (+, −, ◐, Aa) and the × on story cards show their label as a tooltip on hover or keyboard focus.
 
 ## [0.2.1] - 2026-10-15

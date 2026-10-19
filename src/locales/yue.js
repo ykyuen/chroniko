@@ -17,6 +17,7 @@ export default {
   placeholder: '撳一下事件就會加入呢度。',
   showOnTimeline: '喺時間軸度睇',
   readMore: '睇多啲 ↗',
+  tags: '標籤',
   remove: (title) => `移走「${title}」`,
   endOf: (title) => `${title}完結`,
   lasted: (duration) => `維持咗${duration}`,
