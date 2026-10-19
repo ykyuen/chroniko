@@ -32,13 +32,13 @@ The minified files can be loaded from jsDelivr without installing anything.
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chroniko</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chroniko@0.2.1/dist/chroniko.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chroniko@0.3.0/dist/chroniko.min.css">
 </head>
 <body>
   <div id="timeline"></div>
 
   <script type="module">
-    import { Chroniko } from 'https://cdn.jsdelivr.net/npm/chroniko@0.2.1/dist/chroniko.min.js';
+    import { Chroniko } from 'https://cdn.jsdelivr.net/npm/chroniko@0.3.0/dist/chroniko.min.js';
 
     const timeline = new Chroniko('#timeline', {
       events: [
