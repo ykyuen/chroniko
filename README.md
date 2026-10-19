@@ -5,7 +5,9 @@
 
 # Chroniko
 
-Render historical events on a single zoomable time axis. Plain HTML, CSS and JavaScript, with no dependencies. Here is the [demo](https://chroniko.ykyuen.info/philosophers-in-history/?lang=en).
+Render historical events on a single zoomable time axis. Plain HTML, CSS and JavaScript, with no dependencies.
+
+View the [demos](https://chroniko.ykyuen.info/).
 
 ## Install
 
