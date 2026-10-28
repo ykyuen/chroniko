@@ -8,6 +8,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - `addEvents(events)`, `updateEvent(id, patch)` and `removeEvents(ids)`: change some events without replacing them all with `setEvents`. The view and selection are kept. `addEvents` returns the added events' ids, and adds none of them if any is invalid. Events added later than all others are packed into the existing lanes, so the lanes already shown don't move. The legend, tag bar and story are redrawn at most once per animation frame.
 - Events added without an `id` continue the position numbering from `setEvents`, so adding events never changes existing generated ids.
+- An API reference in [`docs/API.md`](docs/API.md), linked from the README.
 - The example page has a form under the timeline that adds events, and edits or deletes the event last selected in the timeline.
 
 ### Changed

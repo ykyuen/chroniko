@@ -106,6 +106,8 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 
 `setEvents(events)`, `addEvents(events)`, `updateEvent(id, patch)`, `removeEvents(ids)`, `zoomTo(start, end)`, `zoomBy(factor)`, `panBy(px)`, `fit()`, `select(id)`, `deselect(id)`, `toggle(id)`, `clearSelection()`, `getSelection()`, `reveal(id)`, `getState()`, `setState(state)`, `destroy()`.
 
+See the [API reference](docs/API.md) for every method's parameters, return value and errors.
+
 `zoomTo(start, end)` takes the same date formats as events, or fractional years. `start` must be before `end`, or it throws. A span outside `minSpan` / `maxSpan` is clamped around the middle of the range. This also applies to the `start` / `end` options, `setState` and shared links.
 
 `reveal(id)` pans and zooms so the event is in view (a range fills the middle of the timeline; a point is centered at the current zoom), shows its category if hidden, scrolls the timeline onto the screen, focuses the event and briefly highlights it.
