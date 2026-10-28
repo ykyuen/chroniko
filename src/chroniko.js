@@ -252,6 +252,9 @@ export class Chroniko {
     this.items = [];
     this.hidden = new Set();
     this.selected = new Set();
+    this.colorOf = new Map();
+    this._paletteNext = 0;
+    this._nextIndex = 0;
     this.start = 0;
     this.end = 1;
     this._frame = 0;
@@ -272,60 +275,13 @@ export class Chroniko {
 
   setEvents(events) {
     const items = events
-      .map((event, i) => {
-        // Name the event in date errors, so bad data is easy to find.
-        const date = (field) => {
-          try {
-            return parseDate(event[field]);
-          } catch (err) {
-            const reason = err.message.replace(/^Chroniko: /, '');
-            throw new Error(`Chroniko: event "${event.title ?? i}" has an invalid ${field}: ${reason}`);
-          }
-        };
-        const start = date('start');
-        if (!start) throw new Error(`Chroniko: event "${event.title ?? i}" has no start date`);
-        const end = date('end');
-        return {
-          event,
-          id: String(event.id ?? defaultId(event, i)),
-          start,
-          end,
-          from: start.value,
-          to: end ? end.value + UNIT[end.precision] : null,
-          category: event.category ?? null,
-          // A single string is one tag; blanks and repeats are dropped.
-          tags: [...new Set([event.tags ?? []].flat().map((t) => String(t).trim()).filter(Boolean))],
-        };
-      })
+      .map((event, i) => this._toItem(event, String(event.id ?? defaultId(event, i))))
       .sort((a, b) => a.from - b.from);
-
-    // Ids key selection and DOM lookups; two events sharing one would select
-    // together. Checked before any state changes, so a bad call leaves the
-    // timeline as it was.
-    const seen = new Map();
-    for (const it of items) {
-      const other = seen.get(it.id);
-      if (other) {
-        throw new Error(
-          `Chroniko: events "${other.event.title}" and "${it.event.title}" share the id "${it.id}"; ids must be unique`,
-        );
-      }
-      seen.set(it.id, it);
-    }
+    this._checkIds(items);
     this.items = items;
-
-    this.categories = [...new Set(this.items.map((it) => it.category).filter(Boolean))];
-    // Categories without a configured color take palette colors not already in use.
-    const used = new Set(Object.values(this.options.colors));
-    const free = PALETTE.filter((c) => !used.has(c));
-    let next = 0;
-    this.colorOf = new Map(
-      this.categories.map((c) => [c, this.options.colors[c] ?? free[next++ % free.length] ?? PALETTE[0]]),
-    );
-    for (const it of this.items) it.color = it.event.color ?? this.colorOf.get(it.category) ?? PALETTE[0];
-
-    const [min, max] = this._extent();
-    this._dataSpan = max - min;
+    this._nextIndex = events.length;
+    this._assignColors(items);
+    this._itemsChanged();
     this._measureLabels();
     this._renderLegend();
     this._renderTagbar();
@@ -333,6 +289,65 @@ export class Chroniko {
     this._renderStory();
     this._syncTags();
     this._invalidateLayout();
+  }
+
+  /**
+   * Add one event or an array of events, keeping everything already shown.
+   * An event without an id gets one as if it were appended to the events
+   * array, so existing ids never change. Returns the added events' ids.
+   */
+  addEvents(events) {
+    events = [events].flat();
+    const added = events
+      .map((event, i) => this._toItem(event, String(event.id ?? defaultId(event, this._nextIndex + i))))
+      .sort((a, b) => a.from - b.from);
+    this._checkIds([...this.items, ...added]);
+    this._nextIndex += events.length;
+    // Events arriving in time order can be packed into the existing lanes;
+    // anything earlier needs the whole layout redone.
+    const appended = !this.items.length || !added.length || added[0].from >= this.items.at(-1).from;
+    for (const it of added) this._insert(it);
+    this._assignColors(added);
+    this._itemsChanged();
+    this._measureLabels(added);
+    if (appended && this._layoutScale != null) this._pack(added);
+    else this._layoutScale = null;
+    this._dataChanged(false);
+    return added.map((it) => it.id);
+  }
+
+  /**
+   * Change fields of an event, e.g. updateEvent('deploy-42', { end: '2026-10-28' }).
+   * The patch is merged into the event; a field set to undefined is removed.
+   */
+  updateEvent(id, patch) {
+    id = String(id);
+    const index = this.items.findIndex((it) => it.id === id);
+    if (index < 0) throw new Error(`Chroniko: updateEvent found no event with the id "${id}"`);
+    if (patch.id != null && String(patch.id) !== id) {
+      throw new Error(`Chroniko: updateEvent cannot change the id of "${id}"; remove the event and add it again`);
+    }
+    const item = this._toItem({ ...this.items[index].event, ...patch }, id);
+    this.items.splice(index, 1);
+    this._insert(item);
+    this._assignColors([item]);
+    this._itemsChanged();
+    this._measureLabels([item]);
+    this._layoutScale = null;
+    this._dataChanged(this.selected.has(id));
+  }
+
+  /** Remove one event or an array of events by id. Unknown ids are ignored. */
+  removeEvents(ids) {
+    const gone = new Set([ids].flat().map(String));
+    const items = this.items.filter((it) => !gone.has(it.id));
+    if (items.length === this.items.length) return;
+    this.items = items;
+    this._itemsChanged();
+    this._layoutScale = null;
+    this._dataChanged(false);
+    const selected = [...this.selected].filter((id) => !gone.has(id));
+    if (selected.length < this.selected.size) this._setSelection(selected);
   }
 
   /**
@@ -863,6 +878,103 @@ export class Chroniko {
     return (clientX - rect.left) / rect.width;
   }
 
+  // ---- Event data ------------------------------------------------------------
+
+  // The internal record for an event. Throws, naming the event, on bad dates.
+  _toItem(event, id) {
+    const date = (field) => {
+      try {
+        return parseDate(event[field]);
+      } catch (err) {
+        const reason = err.message.replace(/^Chroniko: /, '');
+        throw new Error(`Chroniko: event "${event.title ?? id}" has an invalid ${field}: ${reason}`);
+      }
+    };
+    const start = date('start');
+    if (!start) throw new Error(`Chroniko: event "${event.title ?? id}" has no start date`);
+    const end = date('end');
+    return {
+      event,
+      id,
+      start,
+      end,
+      from: start.value,
+      to: end ? end.value + UNIT[end.precision] : null,
+      category: event.category ?? null,
+      // A single string is one tag; blanks and repeats are dropped.
+      tags: [...new Set([event.tags ?? []].flat().map((t) => String(t).trim()).filter(Boolean))],
+    };
+  }
+
+  // Ids key selection and DOM lookups; two events sharing one would select
+  // together. Checked before any state changes, so a bad call leaves the
+  // timeline as it was.
+  _checkIds(items) {
+    const seen = new Map();
+    for (const it of items) {
+      const other = seen.get(it.id);
+      if (other) {
+        throw new Error(
+          `Chroniko: events "${other.event.title}" and "${it.event.title}" share the id "${it.id}"; ids must be unique`,
+        );
+      }
+      seen.set(it.id, it);
+    }
+  }
+
+  // Insert keeping this.items in start order; ties go after the events
+  // already there, as a stable sort of the combined list would put them.
+  _insert(item) {
+    let lo = 0;
+    let hi = this.items.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.items[mid].from <= item.from) lo = mid + 1;
+      else hi = mid;
+    }
+    this.items.splice(lo, 0, item);
+  }
+
+  // A category keeps its color once it has one, so adding or replacing events
+  // never recolors those already shown. Categories without a configured color
+  // take palette colors not used in options.colors.
+  _assignColors(items) {
+    const used = new Set(Object.values(this.options.colors));
+    const free = PALETTE.filter((c) => !used.has(c));
+    for (const it of items) {
+      const c = it.category;
+      if (c && !this.colorOf.has(c)) {
+        this.colorOf.set(c, this.options.colors[c] ?? free[this._paletteNext++ % free.length] ?? PALETTE[0]);
+      }
+      it.color = it.event.color ?? this.colorOf.get(c) ?? PALETTE[0];
+    }
+  }
+
+  // What is derived from the whole event list: the legend's categories (in
+  // order of first appearance) and the data span behind the default maxSpan.
+  _itemsChanged() {
+    this.categories = [...new Set(this.items.map((it) => it.category).filter(Boolean))];
+    const [min, max] = this._extent();
+    this._dataSpan = max - min;
+  }
+
+  // addEvents, updateEvent and removeEvents redraw the legend, tag bar and
+  // (if a selected event changed) the story once per frame, however many
+  // calls were made in it.
+  _dataChanged(story) {
+    this._pendingData = { story: this._pendingData?.story || story };
+    this._scheduleRender();
+  }
+
+  _flushData() {
+    const { story } = this._pendingData;
+    this._pendingData = null;
+    this._renderLegend();
+    this._renderTagbar();
+    if (story) this._renderStory();
+    this._syncTags();
+  }
+
   _extent() {
     let min = Infinity;
     let max = -Infinity;
@@ -876,7 +988,7 @@ export class Chroniko {
   // Label widths come from a canvas rather than the DOM so measuring thousands
   // of titles stays cheap. The font is read from a probe .ck-label, so styles
   // aimed at the label itself (not just .ck-lanes) are picked up too.
-  _measureLabels() {
+  _measureLabels(items = this.items) {
     const ctx = (this._ctx ??= document.createElement('canvas').getContext('2d'));
     const probe = document.createElement('span');
     probe.className = 'ck-label';
@@ -888,7 +1000,7 @@ export class Chroniko {
     ctx.wordSpacing = cs.wordSpacing === 'normal' ? '0px' : cs.wordSpacing;
     const transform = cs.textTransform;
     probe.remove();
-    for (const it of this.items) {
+    for (const it of items) {
       let title = it.event.title ?? '';
       if (transform === 'uppercase') title = title.toUpperCase();
       else if (transform === 'lowercase') title = title.toLowerCase();
@@ -907,6 +1019,7 @@ export class Chroniko {
   }
 
   _render() {
+    if (this._pendingData) this._flushData();
     const width = this.viewport.clientWidth;
     if (!width) return;
     const scale = width / (this.end - this.start);
@@ -923,8 +1036,18 @@ export class Chroniko {
   // label) ends before this one starts. Packing the whole data set, not just
   // what is on screen, keeps each event in its lane while panning.
   _layout(scale) {
-    const laneEnds = [];
-    for (const it of this.items) {
+    this._layoutScale = scale;
+    this._laneEnds = [];
+    this._pack(this.items);
+  }
+
+  // Pack items, in start order and all starting no earlier than those already
+  // packed, into the lanes at the current layout scale. Packing events that
+  // arrive in time order this way gives the same lanes as a full _layout().
+  _pack(items) {
+    const scale = this._layoutScale;
+    const laneEnds = this._laneEnds;
+    for (const it of items) {
       if (it.category && this.hidden.has(it.category)) {
         it.lane = -1;
         continue;
@@ -941,7 +1064,6 @@ export class Chroniko {
       it.lane = lane;
     }
     this._laneCount = laneEnds.length;
-    this._layoutScale = scale;
   }
 
   _invalidateLayout() {

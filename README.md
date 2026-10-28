@@ -77,6 +77,8 @@ If an event has no `id`, one is generated from its category and its 0-based posi
 
 Generated ids depend on position, so they change when events are inserted, removed or reordered. Give events an explicit `id` if you call `setEvents` more than once and want the selection to follow the same events.
 
+Events passed to `addEvents` without an `id` continue the numbering: after `setEvents` with 5 events, the next event added gets position 5, then 6, and so on, even if some events were removed in between. So adding events never changes the ids of the ones already there.
+
 Ids must be unique. If two events end up with the same id, whether given or generated, `setEvents` (and the constructor) throws an error naming both events and leaves the timeline unchanged.
 
 ### Options
@@ -102,11 +104,28 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 
 ### Methods
 
-`setEvents(events)`, `zoomTo(start, end)`, `zoomBy(factor)`, `panBy(px)`, `fit()`, `select(id)`, `deselect(id)`, `toggle(id)`, `clearSelection()`, `getSelection()`, `reveal(id)`, `getState()`, `setState(state)`, `destroy()`.
+`setEvents(events)`, `addEvents(events)`, `updateEvent(id, patch)`, `removeEvents(ids)`, `zoomTo(start, end)`, `zoomBy(factor)`, `panBy(px)`, `fit()`, `select(id)`, `deselect(id)`, `toggle(id)`, `clearSelection()`, `getSelection()`, `reveal(id)`, `getState()`, `setState(state)`, `destroy()`.
 
 `zoomTo(start, end)` takes the same date formats as events, or fractional years. `start` must be before `end`, or it throws. A span outside `minSpan` / `maxSpan` is clamped around the middle of the range. This also applies to the `start` / `end` options, `setState` and shared links.
 
 `reveal(id)` pans and zooms so the event is in view (a range fills the middle of the timeline; a point is centered at the current zoom), shows its category if hidden, scrolls the timeline onto the screen, focuses the event and briefly highlights it.
+
+### Updating events
+
+`setEvents(events)` replaces every event. To change a few without starting over, use:
+
+```js
+const [id] = timeline.addEvents({ title: 'Deploy started', start: '2026-10-28', category: 'deploy' });
+timeline.updateEvent(id, { end: '2026-10-30' });
+timeline.removeEvents(id);
+```
+
+- `addEvents(events)` takes one event or an array and returns the added events' ids. It throws, naming the event, on an invalid date, a missing start or an id that is already used, and then adds none of them. An event without an `id` gets one as if it were appended to the `events` array (see [Event ids](#event-ids)), so existing ids never change.
+- `updateEvent(id, patch)` merges `patch` into the event, e.g. `{ end: '1945-09-02' }`; a field set to `undefined` is removed. It throws if there is no event with that id, if the patch changes the id (remove the event and add it again instead), or if the result is invalid, and then leaves the event as it was.
+- `removeEvents(ids)` takes one id or an array; unknown ids are ignored. Removed events leave the selection, and `onSelectionChange` is called if the selection changed.
+- The view doesn't move, and selected events stay selected. Call `fit()` to show everything again.
+- Events added later than all others keep the lanes of those already shown. An earlier event, an update or a removal rearranges the lanes.
+- The legend, tag bar and story are redrawn once per animation frame, however many calls were made in it, so adding events one at a time is cheap.
 
 ### Sharing
 
@@ -188,7 +207,7 @@ Each event's color is picked in this order:
 
 1. The event's own `color` field.
 2. The color of its category in the `colors` option.
-3. A color from the built-in palette. Each category without a configured color gets the next palette color that isn't already used in `colors`. Events without a category use the first palette color.
+3. A color from the built-in palette. Each category without a configured color gets the next palette color that isn't already used in `colors`, and keeps it for the timeline's lifetime, so adding or replacing events never recolors a category. Events without a category use the first palette color.
 
 ```js
 new Chroniko('#timeline', {

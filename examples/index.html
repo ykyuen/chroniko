@@ -14,6 +14,15 @@
       .controls { margin: 0 0 16px; }
       .controls label { margin-right: 6px; }
       .controls select { font: inherit; }
+      .editor { max-width: 640px; margin: 24px 0 0; padding: 16px; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 8px; }
+      .editor legend { padding: 0 6px; font-weight: 600; }
+      .editor .fields { display: grid; grid-template-columns: max-content 1fr; gap: 8px 12px; align-items: center; }
+      .editor input, .editor textarea, .editor button { font: inherit; }
+      .editor textarea { resize: vertical; }
+      .editor .hint { margin: 8px 0; font-size: 0.875em; }
+      .editor .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+      .editor output { display: block; margin-top: 8px; color: #c0392b; }
+      @media (max-width: 480px) { .editor .fields { grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
@@ -39,6 +48,36 @@
         </select>
       </div>
       <div id="timeline"></div>
+
+      <form id="editor" class="editor" novalidate>
+        <fieldset>
+          <legend id="editor-title">Add an event</legend>
+          <div class="fields">
+            <label for="ev-id">Id</label>
+            <input id="ev-id" name="id" placeholder="Optional; generated if empty">
+            <label for="ev-title">Title</label>
+            <input id="ev-title" name="title" required>
+            <label for="ev-start">Start</label>
+            <input id="ev-start" name="start" required placeholder="e.g. 1969-07-20 or -44">
+            <label for="ev-end">End</label>
+            <input id="ev-end" name="end" placeholder="Optional">
+            <label for="ev-category">Category</label>
+            <input id="ev-category" name="category" list="categories">
+            <label for="ev-tags">Tags</label>
+            <input id="ev-tags" name="tags" placeholder="Comma-separated">
+            <label for="ev-description">Description</label>
+            <textarea id="ev-description" name="description" rows="3"></textarea>
+          </div>
+          <p class="hint">Dates are "YYYY", "YYYY-MM" or "YYYY-MM-DD"; negative years are BCE. Select an event in the timeline to edit it here.</p>
+          <div class="buttons">
+            <button type="submit" id="ev-save">Add event</button>
+            <button type="button" id="ev-delete" hidden>Delete event</button>
+            <button type="button" id="ev-new" hidden>New event</button>
+          </div>
+          <output id="ev-error" aria-live="polite"></output>
+        </fieldset>
+        <datalist id="categories"></datalist>
+      </form>
     </main>
 
     <script type="module">
@@ -72,8 +111,90 @@
         colors: { war: '#e15759', politics: '#4e79a7', science: '#59a14f' },
         syncUrl: true,
         textSizeToggle: true,
-        onSelectionChange: (events) => console.log('selection', events),
+        onSelectionChange: () => selectionChanged(),
       });
+
+      // The event form adds events with addEvents(), and edits the event last
+      // selected in the timeline with updateEvent() and removeEvents(). Each
+      // keeps the view and the selection.
+      const form = document.querySelector('#editor');
+      const field = (name) => form.elements[name];
+      const error = document.querySelector('#ev-error');
+      let editing = null; // id of the event in the form, or null when adding
+      let shown = new Set(); // selected ids at the last selection change
+
+      document.querySelector('#categories').append(
+        ...[...new Set(events.map((e) => e.category).filter(Boolean))].map((c) => new Option(c)),
+      );
+
+      function load(id, event) {
+        editing = id;
+        form.reset();
+        error.value = '';
+        if (event) {
+          field('id').value = id;
+          for (const name of ['title', 'start', 'end', 'category', 'description']) field(name).value = event[name] ?? '';
+          field('tags').value = [event.tags ?? []].flat().join(', ');
+        }
+        field('id').readOnly = id != null; // updateEvent() can't change an id
+        document.querySelector('#editor-title').textContent = id == null ? 'Add an event' : `Edit "${event.title ?? id}"`;
+        document.querySelector('#ev-save').textContent = id == null ? 'Add event' : 'Update event';
+        document.querySelector('#ev-delete').hidden = id == null;
+        document.querySelector('#ev-new').hidden = id == null;
+      }
+
+      // Load a newly selected event; if the one being edited was deselected,
+      // go back to adding. Also runs once the timeline exists, since a shared
+      // link can select events while it is being built.
+      function selectionChanged() {
+        if (!window.timeline) return;
+        const ids = timeline.getState().selected;
+        const selection = timeline.getSelection(); // same order as ids
+        const i = ids.findLastIndex((id) => !shown.has(id));
+        shown = new Set(ids);
+        if (i >= 0) load(ids[i], selection[i]);
+        else if (editing != null && !shown.has(editing)) load(null);
+      }
+      selectionChanged();
+
+      // Empty fields become undefined, which updateEvent() removes from the event.
+      function readForm() {
+        const text = (name) => field(name).value.trim() || undefined;
+        const tags = field('tags').value.split(',').map((t) => t.trim()).filter(Boolean);
+        return {
+          title: text('title'),
+          start: text('start'),
+          end: text('end'),
+          category: text('category'),
+          tags: tags.length ? tags : undefined,
+          description: text('description'),
+        };
+      }
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!form.reportValidity()) return;
+        try {
+          if (editing != null) {
+            timeline.updateEvent(editing, readForm());
+            timeline.reveal(editing);
+          } else {
+            const event = readForm();
+            const id = field('id').value.trim();
+            const [added] = timeline.addEvents(id ? { id, ...event } : event);
+            load(null);
+            timeline.reveal(added);
+          }
+        } catch (err) {
+          error.value = err.message.replace(/^Chroniko: /, '');
+        }
+      });
+
+      document.querySelector('#ev-delete').addEventListener('click', () => {
+        timeline.removeEvents(editing);
+        load(null);
+      });
+      document.querySelector('#ev-new').addEventListener('click', () => load(null));
     </script>
   </body>
 </html>

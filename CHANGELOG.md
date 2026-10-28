@@ -2,6 +2,18 @@
 
 All notable changes to Chroniko are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `addEvents(events)`, `updateEvent(id, patch)` and `removeEvents(ids)`: change some events without replacing them all with `setEvents`. The view and selection are kept. `addEvents` returns the added events' ids, and adds none of them if any is invalid. Events added later than all others are packed into the existing lanes, so the lanes already shown don't move. The legend, tag bar and story are redrawn at most once per animation frame.
+- Events added without an `id` continue the position numbering from `setEvents`, so adding events never changes existing generated ids.
+- The example page has a form under the timeline that adds events, and edits or deletes the event last selected in the timeline.
+
+### Changed
+
+- A category keeps its palette color for the timeline's lifetime. Before, every `setEvents` call assigned palette colors again from scratch, so a category could change color when the events changed.
+
 ## [0.3.1] - 2026-10-19
 
 ### Added
