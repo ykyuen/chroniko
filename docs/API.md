@@ -161,7 +161,7 @@ Replaces every event.
 
 **Throws:** if an event has an invalid or missing date, or if two events share an id. The timeline is then left as it was.
 
-- Selected events that are still in the new list stay selected. Selected events that are no longer there are dropped from the selection.
+- Selected events that are still in the new list stay selected. Selected events that are no longer there are dropped from the selection. If that changes the selection, `onSelectionChange` is called.
 - The view doesn't move. Call [`fit()`](#fit) afterwards to show all the new events.
 - Each category keeps its palette color.
 
@@ -335,7 +335,7 @@ Called with the selected [event objects](#event-object), in chronological order,
 
 - clicking events or tags, pressing Esc, or clicking **Clear all**;
 - calling `select`, `deselect`, `toggle`, `clearSelection` or `setState`;
-- `removeEvents` removing a selected event;
+- `setEvents` or `removeEvents` removing a selected event;
 - the URL hash changing while `syncUrl` is on.
 
 > [!IMPORTANT]

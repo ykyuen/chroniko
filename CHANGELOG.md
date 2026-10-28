@@ -13,6 +13,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 ### Changed
 
+- `setEvents` calls `onSelectionChange` when selected events are no longer in the new list and so leave the selection, as `removeEvents` does. With `syncUrl`, the URL is updated too. Before, the selection changed without either.
 - A category keeps its palette color for the timeline's lifetime. Before, every `setEvents` call assigned palette colors again from scratch, so a category could change color when the events changed.
 
 ## [0.3.1] - 2026-10-19

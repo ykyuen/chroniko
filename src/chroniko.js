@@ -285,10 +285,16 @@ export class Chroniko {
     this._measureLabels();
     this._renderLegend();
     this._renderTagbar();
+    const selected = this.selected.size;
     this.selected = new Set(this.items.filter((it) => this.selected.has(it.id)).map((it) => it.id));
     this._renderStory();
     this._syncTags();
     this._invalidateLayout();
+    // Selected events that are gone leave the selection, as with removeEvents.
+    if (this.selected.size < selected) {
+      this._stateChanged();
+      this.options.onSelectionChange?.(this.getSelection());
+    }
   }
 
   /**
