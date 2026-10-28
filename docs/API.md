@@ -3,7 +3,7 @@
 This page covers everything Chroniko exports: the `Chroniko` class, its options and methods, and the date helpers. For a guide to installing and using it, see the [README](../README.md).
 
 > [!NOTE]
-> `addEvents`, `updateEvent` and `removeEvents` are new in 0.4.0, which hasn't been released yet. Everything else is available from 0.3.1.
+> `addEvents`, `updateEvent` and `removeEvents` are new in 0.4.0. Everything else is available from 0.3.1.
 
 ## Contents
 
@@ -36,9 +36,9 @@ import 'chroniko/chroniko.css';
 
 ```html
 <!-- From a CDN, without installing anything -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chroniko@0.3.1/dist/chroniko.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chroniko@0.4.0/dist/chroniko.min.css">
 <script type="module">
-  import { Chroniko } from 'https://cdn.jsdelivr.net/npm/chroniko@0.3.1/dist/chroniko.min.js';
+  import { Chroniko } from 'https://cdn.jsdelivr.net/npm/chroniko@0.4.0/dist/chroniko.min.js';
 </script>
 ```
 
