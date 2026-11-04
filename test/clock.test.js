@@ -189,3 +189,12 @@ describe('formatDuration across DST in America/New_York', () => {
     assert.equal(duration('2026-02-15T12:00', '2026-03-15T11:00'), '27 days, 23 hours');
   });
 });
+
+describe('zoneLabel', () => {
+  inZone('America/New_York');
+
+  test('names the offset, or both offsets across a DST change', () => {
+    assert.equal(clock.zoneLabel(parseTime('2026-01-10').value, parseTime('2026-01-11').value), 'GMT-5');
+    assert.equal(clock.zoneLabel(parseTime('2026-03-07').value, parseTime('2026-03-09').value), 'GMT-5 – GMT-4');
+  });
+});

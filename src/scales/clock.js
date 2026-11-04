@@ -260,6 +260,13 @@ export default {
   },
 
   ticks: timeTicks,
+
+  // The zone's offset for the axis, e.g. "GMT+8", or "GMT-5 – GMT-4" for a
+  // view across a DST change.
+  zoneLabel(start, end) {
+    const [a, b] = [local.offsetLabel(start), local.offsetLabel(end)];
+    return a === b ? a : `${a} – ${b}`;
+  },
   formatDate: timeText,
   formatDuration: timeDurationText,
 

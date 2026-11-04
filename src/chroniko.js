@@ -19,7 +19,9 @@
 
 import LOCALES from './locales/index.js';
 import historical, { parseDate, dateText, durationText } from './scales/historical.js';
-import { parseTime, timeText, timeDurationText } from './scales/clock.js';
+import clock, { parseTime, timeText, timeDurationText } from './scales/clock.js';
+
+const SCALES = { historical, clock };
 
 export { parseDate, parseTime };
 
@@ -122,11 +124,15 @@ export class Chroniko {
    * @param {string|HTMLElement} container  Element (or selector) to render into.
    * @param {object} options
    * @param {Array}  options.events     [{ id, title, start, end?, category?, tags?, description?, url?, color? }]
-   * @param {*}      [options.start]    Initial visible range start (any parseDate input).
+   * @param {string} [options.timeScale] 'historical' (default): dates are years, months and days, read by
+   *                                    parseDate. 'clock': dates are instants (epoch ms, Date or ISO string)
+   *                                    read by parseTime, shown in local time.
+   * @param {*}      [options.start]    Initial visible range start (any date the time scale reads).
    * @param {*}      [options.end]      Initial visible range end. Fits all events when omitted.
    * @param {object} [options.colors]   Category → color, e.g. { war: '#c0392b' }.
-   * @param {number} [options.minSpan]  Smallest visible span in years (default: 1 month).
-   * @param {number} [options.maxSpan]  Largest visible span in years (default: 3× the data span).
+   * @param {number} [options.minSpan]  Smallest visible span, in years or (clock) ms (default: 1 month, or 1 second).
+   * @param {number} [options.maxSpan]  Largest visible span, in years or (clock) ms (default: 3× the data span,
+   *                                    at least 100 years or 1 day).
    * @param {Function} [options.onSelectionChange] Called with the selected events in chronological order.
    * @param {boolean} [options.syncUrl] Keep the view, selection and hidden categories in the URL hash.
    * @param {string} [options.storyPosition] 'below' (default) or 'right' of the timeline.
@@ -143,6 +149,7 @@ export class Chroniko {
     const el = typeof container === 'string' ? document.querySelector(container) : container;
     if (!el) throw new Error('Chroniko: container not found');
     this.options = {
+      timeScale: 'historical',
       colors: {},
       storyPosition: 'below',
       split: 0.6,
@@ -152,7 +159,10 @@ export class Chroniko {
       tagLabels: {},
       ...options,
     };
-    const { storyPosition, split } = this.options;
+    const { timeScale, storyPosition, split } = this.options;
+    if (!Object.hasOwn(SCALES, timeScale)) {
+      throw new Error(`Chroniko: timeScale must be 'historical' or 'clock', got ${JSON.stringify(timeScale)}`);
+    }
     if (storyPosition !== 'below' && storyPosition !== 'right') {
       throw new Error(`Chroniko: storyPosition must be 'below' or 'right', got ${JSON.stringify(storyPosition)}`);
     }
@@ -160,7 +170,7 @@ export class Chroniko {
       throw new Error(`Chroniko: split must be a number between 0 and 1, got ${JSON.stringify(split)}`);
     }
     this.m = messagesFor(this.options.language, this.options.uiText);
-    this.scale = historical;
+    this.scale = SCALES[timeScale];
     this.items = [];
     this.hidden = new Set();
     this.selected = new Set();
@@ -276,7 +286,7 @@ export class Chroniko {
   }
 
   /**
-   * Show the range [start, end]; accepts any parseDate input. A span outside
+   * Show the range [start, end]; accepts any date the time scale reads. A span outside
    * minSpan/maxSpan is clamped around the range's center.
    */
   zoomTo(start, end) {
@@ -355,7 +365,10 @@ export class Chroniko {
     this._setView(center - span / 2, center + span / 2);
   }
 
-  /** The view (in fractional years), selected ids and hidden categories, for saving or sharing. */
+  /**
+   * The view (in fractional years, or epoch ms on the clock scale), selected
+   * ids and hidden categories, for saving or sharing.
+   */
   getState() {
     return {
       start: this.start,
@@ -427,6 +440,7 @@ export class Chroniko {
             <div class="ck-grid"></div>
             <div class="ck-lanes"></div>
             <div class="ck-axis"></div>
+            <div class="ck-zone" hidden></div>
             <div class="ck-hint" aria-hidden="true"></div>
           </div>
         </div>
@@ -439,6 +453,7 @@ export class Chroniko {
     this.gridEl = this.root.querySelector('.ck-grid');
     this.lanesEl = this.root.querySelector('.ck-lanes');
     this.axisEl = this.root.querySelector('.ck-axis');
+    this.zoneEl = this.root.querySelector('.ck-zone');
     this.storyEl = this.root.querySelector('.ck-story');
     this.hintEl = this.root.querySelector('.ck-hint');
     this.hintEl.innerHTML = m.hint(esc(ctrl));
@@ -1007,6 +1022,10 @@ export class Chroniko {
     }
     this.axisEl.innerHTML = ticks;
     this.gridEl.innerHTML = lines;
+    // The clock scale names its time zone, so screenshots aren't ambiguous.
+    const zone = this.scale.zoneLabel?.(this.start, this.end) ?? '';
+    if (this.zoneEl.textContent !== zone) this.zoneEl.textContent = zone;
+    this.zoneEl.hidden = !zone;
   }
 
   _renderEvents(width, x) {
