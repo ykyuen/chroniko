@@ -19,8 +19,9 @@
 
 import LOCALES from './locales/index.js';
 import historical, { parseDate, dateText, durationText } from './scales/historical.js';
+import { parseTime, timeText } from './scales/clock.js';
 
-export { parseDate };
+export { parseDate, parseTime };
 
 const PALETTE = ['#4e79a7', '#e15759', '#59a14f', '#f28e2b', '#b07aa1', '#76b7b2', '#edc948', '#9c755f'];
 const MIN_TICK_GAP = 90; // px between axis labels
@@ -47,6 +48,7 @@ function messagesFor(language, overrides) {
     ...LOCALES.en,
     ...LOCALES[language],
     ...overrides,
+    language,
     number: new Intl.NumberFormat(language),
     plural: new Intl.PluralRules(language),
   };
@@ -59,9 +61,12 @@ export function formatYear(year, language = 'en') {
   return messagesFor(language).year(year);
 }
 
-/** A parseDate() result in the given language, e.g. "19 Mar 1644". */
+/**
+ * A parseDate() or parseTime() result in the given language, e.g.
+ * "19 Mar 1644" or "28 Oct 2026, 10:30".
+ */
 export function formatDate(d, language = 'en') {
-  return dateText(d, messagesFor(language));
+  return (d.scale === 'clock' ? timeText : dateText)(d, messagesFor(language));
 }
 
 /**
