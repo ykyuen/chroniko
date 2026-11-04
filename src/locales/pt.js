@@ -28,6 +28,7 @@ export default {
   year: (y) => (y < 0 ? `${-y} a.C.` : String(y)),
   month: (month, year) => `${month} ${year}`,
   day: (day, month, year) => `${day} ${month} ${year}`,
+  dayMonth: (day, month) => `${day} ${month}`,
   dateTime: (date, time) => `${date}, ${time}`,
 
   units: {

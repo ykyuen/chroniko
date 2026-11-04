@@ -27,6 +27,7 @@ export default {
   year: (y) => (y < 0 ? `紀元前${-y}年` : `${y}年`),
   month: (month, year) => `${year}${month}`,
   day: (day, month, year) => `${year}${month}${day}日`,
+  dayMonth: (day, month) => `${month}${day}日`,
   dateTime: (date, time) => `${date} ${time}`,
 
   units: {

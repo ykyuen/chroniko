@@ -29,6 +29,7 @@ export default {
   year: (y) => (y < 0 ? `${-y} av. J.-C.` : String(y)),
   month: (month, year) => `${month} ${year}`,
   day: (day, month, year) => `${day === 1 ? '1er' : day} ${month} ${year}`,
+  dayMonth: (day, month) => `${day === 1 ? '1er' : day} ${month}`,
   dateTime: (date, time) => `${date} à ${time}`,
 
   units: {

@@ -31,11 +31,13 @@ export default {
   endsAria: (title, date, duration) => `${title} ends ${date}${duration ? `, after ${duration}` : ''}. Go to event`,
 
   // Dates. year() gets a whole year, negative for BCE; month() and day() get
-  // the month name and the already formatted year.
+  // the month name and the already formatted year. dayMonth() labels day
+  // ticks on the clock scale, and dateTime() joins a date and a 24-hour time.
   months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   year: (y) => (y < 0 ? `${-y} BCE` : String(y)),
   month: (month, year) => `${month} ${year}`,
   day: (day, month, year) => `${day} ${month} ${year}`,
+  dayMonth: (day, month) => `${day} ${month}`,
   dateTime: (date, time) => `${date}, ${time}`,
 
   // Durations, e.g. "2 years, 11 months"

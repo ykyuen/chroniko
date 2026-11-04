@@ -26,6 +26,7 @@ export default {
   year: (y) => (y < 0 ? `기원전 ${-y}년` : `${y}년`),
   month: (month, year) => `${year} ${month}`,
   day: (day, month, year) => `${year} ${month} ${day}일`,
+  dayMonth: (day, month) => `${month} ${day}일`,
   dateTime: (date, time) => `${date} ${time}`,
 
   units: {

@@ -151,6 +151,103 @@ export function timeDurationText(start, end, m, zone = local) {
   return durationWords(parts.slice(0, UNITS.indexOf(unit) + 1), m);
 }
 
+// Tick steps, smallest first, as [unit, count]. Day steps count days of the
+// month (1, 6, 11, … for 5 days) so they restart on the 1st of each month.
+const TICK_STEPS = [
+  ...[1, 5, 15, 30].map((n) => ['second', n]),
+  ...[1, 5, 15, 30].map((n) => ['minute', n]),
+  ...[1, 3, 6, 12].map((n) => ['hour', n]),
+  ...[1, 2, 5, 10].map((n) => ['day', n]),
+  ...[1, 3, 6].map((n) => ['month', n]),
+  ...[1, 10, 100, 1000].flatMap((p) => [p, 2 * p, 5 * p]).map((n) => ['year', n]),
+];
+// Approximate unit lengths, only for choosing a step.
+const UNIT_MS = { second: 1000, minute: MINUTE, hour: HOUR, day: DAY, month: 30.44 * DAY, year: 365.25 * DAY };
+
+/**
+ * Axis ticks for the view [start, end] (epoch ms) at pxPerUnit (px per ms),
+ * using the smallest step that keeps labels at least minGap px apart.
+ * Day and longer steps fall on local midnights, so a DST day is 23 or 25
+ * hours wide. Shorter steps fall on round local wall-clock times (on the
+ * hour in zones with :30 offsets too) but are spaced by elapsed time, so an
+ * hour step shows 01:00 twice on the night clocks go back.
+ */
+export function timeTicks(start, end, pxPerUnit, minGap, m, zone = local) {
+  const [unit, n] = TICK_STEPS.find(([u, k]) => k * UNIT_MS[u] * pxPerUnit >= minGap) ?? TICK_STEPS.at(-1);
+  const values = UNITS.indexOf(unit) <= UNITS.indexOf('day') ? calendarTicks(start, end, unit, n, zone) : wallClockTicks(start, end, unit, n, zone);
+  return values.map((value) => ({ value, label: tickLabel(zone.fields(value), unit, m) }));
+}
+
+function calendarTicks(start, end, unit, n, zone) {
+  const f = zone.fields(start);
+  const ticks = [];
+  for (let i = 0; ; i++) {
+    const at = {
+      year: { year: f.year + i },
+      month: { year: f.year, month: f.month + i },
+      day: { year: f.year, month: f.month, day: f.day + i },
+    }[unit];
+    const value = zone.instant(at);
+    if (value > end) return ticks;
+    if (value >= start && onStep(zone.fields(value), unit, n)) ticks.push(value);
+  }
+}
+
+function onStep({ year, month, day }, unit, n) {
+  if (unit === 'year') return year % n === 0;
+  if (unit === 'month') return (month - 1) % n === 0;
+  // A day tick needs a whole step before the next month starts, so the last
+  // one in a month isn't crowded against the 1st (no 31st after the 26th).
+  return day === 1 || ((day - 1) % n === 0 && day + n <= daysInMonth(year, month) + 1);
+}
+
+function wallClockTicks(start, end, unit, n, zone) {
+  const size = n * UNIT_MS[unit];
+  // The wall-clock time f rounded down to the step.
+  const floor = (f) => {
+    const g = { ...f, ms: 0, [unit]: Math.floor(f[unit] / n) * n };
+    if (unit !== 'second') g.second = 0;
+    if (unit === 'hour') g.minute = 0;
+    return g;
+  };
+  const isRound = (f) => {
+    const g = floor(f);
+    return g[unit] === f[unit] && g.minute === f.minute && g.second === f.second && g.ms === f.ms;
+  };
+  // Step by elapsed time while that stays on round times; after an offset
+  // change that breaks it (e.g. 3-hour steps across DST), go to the next
+  // round time instead.
+  const next = (t) => {
+    const after = t + size;
+    const f = zone.fields(after);
+    if (isRound(f)) return after;
+    const g = floor(f);
+    const down = zone.instant(g);
+    if (down > t) return down;
+    const up = zone.instant({ ...g, [unit]: g[unit] + n });
+    return up > t ? up : after;
+  };
+  let t = zone.instant(floor(zone.fields(start)));
+  while (t < start) t = next(t);
+  const ticks = [];
+  for (; t <= end; t = next(t)) ticks.push(t);
+  return ticks;
+}
+
+// The larger unit at its boundaries: the year on 1 January, the day and
+// month at midnight, otherwise the time (with seconds for second steps).
+function tickLabel(f, unit, m) {
+  const pad = (k) => String(k).padStart(2, '0');
+  const midnight = f.hour === 0 && f.minute === 0 && f.second === 0 && f.ms === 0;
+  if (midnight || unit === 'day' || unit === 'month' || unit === 'year') {
+    if (unit === 'year' || (f.month === 1 && f.day === 1)) return m.year(f.year);
+    if (unit === 'month') return m.months[f.month - 1];
+    return m.dayMonth(f.day, m.months[f.month - 1]);
+  }
+  const time = `${pad(f.hour)}:${pad(f.minute)}`;
+  return unit === 'second' && f.second !== 0 ? `${time}:${pad(f.second)}` : time;
+}
+
 export default {
   parse: (input) => parseTime(input),
 
@@ -162,6 +259,7 @@ export default {
     return local.instant({ year, month, day: day + 1 });
   },
 
+  ticks: timeTicks,
   formatDate: timeText,
   formatDuration: timeDurationText,
 
