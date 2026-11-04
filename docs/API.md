@@ -445,7 +445,7 @@ Every error is an `Error` whose message starts with `Chroniko:`. Any method that
 | Thrown by | When |
 | --------- | ---- |
 | Constructor | The container isn't found; `storyPosition` isn't `'below'` or `'right'`; `split` isn't between 0 and 1; `language` is unknown. |
-| Constructor, `setEvents`, `addEvents` | An event has no `start` or an invalid date; two events share an id. |
-| `updateEvent` | Unknown id; the patch changes the id; the updated event is invalid. |
+| Constructor, `setEvents`, `addEvents` | An event isn't an object (e.g. `null`); an event has no `start` or an invalid date; two events share an id. |
+| `updateEvent` | Unknown id; the patch isn't an object; the patch changes the id; the updated event is invalid. |
 | `zoomTo`, `setState` | A date is missing or invalid; `start` isn't before `end`. |
 | `parseDate` | The input can't be parsed, or the date doesn't exist. |

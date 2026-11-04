@@ -176,6 +176,14 @@ function rangeText(item, m) {
 // Id for an event without one: its category, lowercased with whitespace runs
 // turned into hyphens, then its position in the input array, e.g.
 // "olympic-game-3". Events without a category use "event", e.g. "event-3".
+// Anything but a plain object (null, a string, an array) would otherwise fail
+// later with a TypeError that doesn't say which call or event was wrong.
+function checkObject(value, what) {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) return;
+  const kind = value == null ? String(value) : Array.isArray(value) ? 'an array' : `a ${typeof value}`;
+  throw new Error(`Chroniko: ${what} must be an object, not ${kind}`);
+}
+
 function defaultId(event, index) {
   const prefix = String(event.category ?? '').trim().toLowerCase().replace(/\s+/g, '-') || 'event';
   return `${prefix}-${index}`;
@@ -275,7 +283,10 @@ export class Chroniko {
 
   setEvents(events) {
     const items = events
-      .map((event, i) => this._toItem(event, String(event.id ?? defaultId(event, i))))
+      .map((event, i) => {
+        checkObject(event, `event ${i} passed to setEvents`);
+        return this._toItem(event, String(event.id ?? defaultId(event, i)));
+      })
       .sort((a, b) => a.from - b.from);
     this._checkIds(items);
     this.items = items;
@@ -305,7 +316,10 @@ export class Chroniko {
   addEvents(events) {
     events = [events].flat();
     const added = events
-      .map((event, i) => this._toItem(event, String(event.id ?? defaultId(event, this._nextIndex + i))))
+      .map((event, i) => {
+        checkObject(event, `event ${i} passed to addEvents`);
+        return this._toItem(event, String(event.id ?? defaultId(event, this._nextIndex + i)));
+      })
       .sort((a, b) => a.from - b.from);
     this._checkIds([...this.items, ...added]);
     this._nextIndex += events.length;
@@ -330,6 +344,7 @@ export class Chroniko {
     id = String(id);
     const index = this.items.findIndex((it) => it.id === id);
     if (index < 0) throw new Error(`Chroniko: updateEvent found no event with the id "${id}"`);
+    checkObject(patch, `the patch passed to updateEvent`);
     if (patch.id != null && String(patch.id) !== id) {
       throw new Error(`Chroniko: updateEvent cannot change the id of "${id}"; remove the event and add it again`);
     }

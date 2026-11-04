@@ -2,6 +2,12 @@
 
 All notable changes to Chroniko are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `setEvents`, `addEvents` and `updateEvent` throw a `Chroniko:` error naming the call and the event's position when given something other than an object, e.g. `addEvents(null)`. Before, they threw a `TypeError` that didn't say what was wrong. The timeline is still left unchanged.
+
 ## [0.4.0] - 2026-10-28
 
 ### Added
