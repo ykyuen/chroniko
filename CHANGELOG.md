@@ -2,7 +2,7 @@
 
 All notable changes to Chroniko are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.5.0] - 2026-11-04
 
 ### Added
 
@@ -88,7 +88,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - Initial release.
 
-[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.4.1...HEAD
+[0.5.0]: https://github.com/ykyuen/chroniko/compare/0.4.1...0.5.0
 [0.4.1]: https://github.com/ykyuen/chroniko/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/ykyuen/chroniko/compare/0.3.1...0.4.0
 [0.3.1]: https://github.com/ykyuen/chroniko/compare/0.3.0...0.3.1

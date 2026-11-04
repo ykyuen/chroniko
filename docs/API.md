@@ -47,9 +47,9 @@ import 'chroniko/chroniko.css';
 
 ```html
 <!-- From a CDN, without installing anything -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chroniko@0.4.1/dist/chroniko.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chroniko@0.5.0/dist/chroniko.min.css">
 <script type="module">
-  import { Chroniko } from 'https://cdn.jsdelivr.net/npm/chroniko@0.4.1/dist/chroniko.min.js';
+  import { Chroniko } from 'https://cdn.jsdelivr.net/npm/chroniko@0.5.0/dist/chroniko.min.js';
 </script>
 ```
 
