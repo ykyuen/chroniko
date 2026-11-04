@@ -3,7 +3,18 @@
 This page covers everything Chroniko exports: the `Chroniko` class, its options and methods, and the date helpers. For a guide to installing and using it, see the [README](../README.md).
 
 > [!NOTE]
-> `addEvents`, `updateEvent` and `removeEvents` are new in 0.4.0. Everything else is available from 0.3.1.
+> New features by version:
+>
+> - **0.5.0**
+>   - The [`timeScale`](#options) option, for the [clock scale](#clock-scale).
+>   - [`parseTime`](#parsetimeinput).
+>   - [`formatDate`](#formatdatedate-language) and [`formatDuration`](#formatdurationstart-end-language) also accept `parseTime()` results.
+> - **0.4.0**
+>   - [`addEvents`](#addeventsevents)
+>   - [`updateEvent`](#updateeventid-patch)
+>   - [`removeEvents`](#removeeventsids)
+>
+> Everything else is available from 0.3.1.
 
 ## Contents
 
@@ -19,7 +30,7 @@ This page covers everything Chroniko exports: the `Chroniko` class, its options 
   - [State](#state): [`getState`](#getstate), [`setState`](#setstatestate)
   - [Lifecycle](#lifecycle): [`destroy`](#destroy)
 - [Callbacks](#callbacks)
-- [Date helpers](#date-helpers): [`parseDate`](#parsedateinput), [`formatDate`](#formatdatedate-language), [`formatYear`](#formatyearyear-language), [`formatDuration`](#formatdurationstart-end-language)
+- [Date helpers](#date-helpers): [`parseDate`](#parsedateinput), [`parseTime`](#parsetimeinput), [`formatDate`](#formatdatedate-language), [`formatYear`](#formatyearyear-language), [`formatDuration`](#formatdurationstart-end-language)
 - [URL hash format](#url-hash-format)
 - [CSS custom properties](#css-custom-properties)
 - [Errors](#errors)
@@ -30,7 +41,7 @@ Chroniko is an ES module. Load the stylesheet as well as the script.
 
 ```js
 // From npm, with a bundler
-import { Chroniko, parseDate, formatDate, formatYear, formatDuration } from 'chroniko';
+import { Chroniko, parseDate, parseTime, formatDate, formatYear, formatDuration } from 'chroniko';
 import 'chroniko/chroniko.css';
 ```
 
@@ -85,11 +96,12 @@ Every option is optional.
 | Option              | Type                 | Default | Description |
 | ------------------- | -------------------- | ------- | ----------- |
 | `events`            | `object[]`           | `[]`    | The events to show. See [Event object](#event-object). |
+| `timeScale`         | `'historical' \| 'clock'` | `'historical'` | How dates are read and shown. See [Dates](#dates). Any other value throws. |
 | `start`             | [`DateInput`](#dates) | Fit all events | Start of the first visible range. Only used if `end` is also set. |
 | `end`               | [`DateInput`](#dates) | Fit all events | End of the first visible range. Only used if `start` is also set. |
 | `colors`            | `object`             | `{}`    | Category → CSS color, e.g. `{ war: '#c0392b' }`. Categories without a color get one from the built-in palette. |
-| `minSpan`           | `number`             | `1/12` (one month) | Smallest visible span, in years. |
-| `maxSpan`           | `number`             | 3× the data span, at least 100 | Largest visible span, in years. Without this option, the limit grows as events are added. |
+| `minSpan`           | `number`             | `1/12` (one month); clock: `1000` (one second) | Smallest visible span, in years, or ms on the clock scale. |
+| `maxSpan`           | `number`             | 3× the data span, at least 100 years (clock: one day) | Largest visible span, in years, or ms on the clock scale. Without this option, the limit grows as events are added. |
 | `onSelectionChange` | `(events: object[]) => void` | — | Called when the selection changes. See [Callbacks](#callbacks). |
 | `syncUrl`           | `boolean`            | `false` | Keep the view, selection and hidden categories in the URL hash. See [URL hash format](#url-hash-format). |
 | `storyPosition`     | `'below' \| 'right'` | `'below'` | Where the story of selected events goes. |
@@ -128,7 +140,11 @@ Give events explicit ids if you replace them with `setEvents`, or if shared link
 
 ## Dates
 
-A `DateInput` can be any of these:
+What a `DateInput` is depends on the `timeScale` option.
+
+### Historical scale
+
+With `timeScale: 'historical'` (the default), a `DateInput` can be any of these:
 
 | Input | Example | Precision |
 | ----- | ------- | --------- |
@@ -144,6 +160,27 @@ A `DateInput` can be any of these:
 - 29 February is accepted in any year, because historical dates may use the Julian calendar.
 
 Internally, and in [`getState()`](#getstate), positions on the timeline are **fractional years**. For example, `1453.5` is the middle of 1453.
+
+### Clock scale
+
+With `timeScale: 'clock'`, a `DateInput` can be any of these:
+
+| Input | Example | Precision |
+| ----- | ------- | --------- |
+| Epoch ms | `1793836798250` | ms |
+| A `Date` | `new Date()` | ms |
+| `"YYYY-MM-DD"` | `"2026-11-04"` | day |
+| `"YYYY-MM-DDTHH:MM"` | `"2026-11-04T09:02"` | minute |
+| `"YYYY-MM-DDTHH:MM:SS"` | `"2026-11-04T09:02:30"` | second |
+| `"YYYY-MM-DDTHH:MM:SS.sss"` | `"2026-11-04T09:02:30.250"` | ms |
+
+- A time can end with `Z` or an offset (`+08:00`, `-0330`), and then it is an exact instant. A space can replace the `T`. More than three fraction digits are cut to ms.
+- **A string without `Z` or an offset is local time**, including a date-only string, which is local midnight. JavaScript's `Date` reads date-only strings as UTC instead. At a daylight saving change, a local time that doesn't exist (02:30 when the clocks go forward) moves forward an hour, and one that happens twice uses the earlier instant.
+- A date or time that doesn't exist, such as 29 February 2026, hour 24 or second 60, throws an error.
+- An `end` with a time is the instant itself. A date-only `end` covers that whole day, like an all-day calendar event.
+- Dates and times are shown in local time, on a 24-hour clock, and the axis names the time zone (e.g. `GMT+8`).
+
+Internally, and in [`getState()`](#getstate), positions on the timeline are **epoch ms**.
 
 ## Methods
 
@@ -298,8 +335,8 @@ Deselects every event.
 
 ```ts
 {
-  start: number;      // left edge of the view, in fractional years
-  end: number;        // right edge of the view, in fractional years
+  start: number;      // left edge of the view, in fractional years (epoch ms on the clock scale)
+  end: number;        // right edge of the view, in fractional years (epoch ms on the clock scale)
   selected: string[]; // selected ids, in chronological order
   hidden: string[];   // hidden categories
 }
@@ -368,13 +405,36 @@ parseDate('-44-03-15');
 // { year: -44, month: 3, day: 15, precision: 'day', value: -43.79… }
 ```
 
-#### `formatDate(date, language?)`
+#### `parseTime(input)`
 
-Formats a `parseDate()` result at its own precision.
+Parses a [clock `DateInput`](#clock-scale). Strings without `Z` or an offset are read in local time.
+
+**Returns:** `null` if `input` is `null`, `undefined` or `''`. Otherwise it returns:
+
+```ts
+{
+  scale: 'clock';
+  value: number;  // epoch ms
+  precision: 'day' | 'minute' | 'second' | 'ms';
+}
+```
+
+**Throws:** if the input can't be parsed, or if the date or time doesn't exist.
 
 ```js
-formatDate(parseDate('1644-03-19'));            // "19 Mar 1644"
-formatDate(parseDate('1644-03-19'), 'zh-Hant'); // "1644年3月19日"
+parseTime('2026-11-04T09:02:30Z');
+// { scale: 'clock', value: 1793782950000, precision: 'second' }
+```
+
+#### `formatDate(date, language?)`
+
+Formats a `parseDate()` or `parseTime()` result at its own precision. Clock times are written in local time, on a 24-hour clock.
+
+```js
+formatDate(parseDate('1644-03-19'));                   // "19 Mar 1644"
+formatDate(parseDate('1644-03-19'), 'zh-Hant');        // "1644年3月19日"
+formatDate(parseTime('2026-11-04T09:02'));             // "4 Nov 2026, 09:02"
+formatDate(parseTime('2026-11-04T09:02:30.25'), 'de'); // "4. Nov. 2026, 09:02:30,250"
 ```
 
 #### `formatYear(year, language?)`
@@ -388,17 +448,20 @@ formatYear(-221, 'ja'); // "紀元前221年"
 
 #### `formatDuration(start, end, language?)`
 
-How long the time between two `parseDate()` results is. It's the same text as the "lasted …" note in the story.
+How long the time between two `parseDate()` results, or two `parseTime()` results, is. It's the same text as the "lasted …" note in the story.
 
 - It uses the less precise of the two dates: if either is a year only, the result is in whole years.
 - It shows at most two units next to each other, e.g. years and months.
 - There is no year zero, so 27 BCE to 14 CE is 40 years.
+- For clock times, years, months and days are counted on the local calendar, while hours, minutes and seconds are the time that actually passed. So 01:00 to 04:00 on the night the clocks go forward is 2 hours. Durations under a second are "less than a second".
 - It returns `''` if `end` is before `start`.
+- **Throws:** if one date comes from `parseDate()` and the other from `parseTime()`.
 
 ```js
 formatDuration(parseDate('1914-07-28'), parseDate('1918-11-11')); // "4 years, 3 months"
 formatDuration(parseDate('1939-09-01'), parseDate('1945-09-02')); // "6 years" (days aren't next to years)
 formatDuration(parseDate(-27), parseDate(14));                    // "40 years"
+formatDuration(parseTime('2026-11-04T09:02:30'), parseTime('2026-11-04T09:14:05')); // "11 minutes, 35 seconds"
 ```
 
 ## URL hash format
@@ -411,7 +474,7 @@ With `syncUrl: true`, the state is kept in the URL hash like this:
 
 | Key       | Value |
 | --------- | ----- |
-| `ck-view` | `start,end` in fractional years. |
+| `ck-view` | `start,end` in fractional years, or epoch ms on the clock scale. |
 | `ck-sel`  | Selected ids, separated by commas. |
 | `ck-hide` | Hidden categories, separated by commas. |
 
@@ -444,8 +507,9 @@ Every error is an `Error` whose message starts with `Chroniko:`. Any method that
 
 | Thrown by | When |
 | --------- | ---- |
-| Constructor | The container isn't found; `storyPosition` isn't `'below'` or `'right'`; `split` isn't between 0 and 1; `language` is unknown. |
+| Constructor | The container isn't found; `timeScale` isn't `'historical'` or `'clock'`; `storyPosition` isn't `'below'` or `'right'`; `split` isn't between 0 and 1; `language` is unknown. |
 | Constructor, `setEvents`, `addEvents` | An event isn't an object (e.g. `null`); an event has no `start` or an invalid date; two events share an id. |
 | `updateEvent` | Unknown id; the patch isn't an object; the patch changes the id; the updated event is invalid. |
 | `zoomTo`, `setState` | A date is missing or invalid; `start` isn't before `end`. |
-| `parseDate` | The input can't be parsed, or the date doesn't exist. |
+| `parseDate`, `parseTime` | The input can't be parsed, or the date doesn't exist. |
+| `formatDuration` | One date comes from `parseDate()` and the other from `parseTime()`. |

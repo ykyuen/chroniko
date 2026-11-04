@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Chroniko clock example</title>
+    <link rel="stylesheet" href="../src/chroniko.css">
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; padding: 24px 16px; font-family: system-ui, sans-serif; }
+      main { max-width: 1200px; margin: 0 auto; }
+      h1 { margin: 0 0 4px; }
+      p { margin: 0 0 16px; opacity: 0.7; }
+      .controls { margin: 0 0 16px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+      .controls select { font: inherit; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Chroniko: a day of operations</h1>
+      <p>The clock time scale, with deploys, jobs, incidents and alerts from one day. Times without an offset are read in your own time zone, shown at the right end of the axis. Zoom in to see minutes and seconds.</p>
+      <div class="controls">
+        <span>
+          <label for="lang">Language</label>
+          <select id="lang">
+            <option value="en">English</option>
+            <option value="zh-Hant">繁體中文</option>
+            <option value="zh-Hans">简体中文</option>
+            <option value="yue">粵語</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="it">Italiano</option>
+            <option value="es">Español</option>
+            <option value="pt">Português</option>
+            <option value="pl">Polski</option>
+            <option value="nl">Nederlands</option>
+          </select>
+        </span>
+        <a href="./">Historical example</a>
+      </div>
+      <div id="timeline"></div>
+    </main>
+
+    <script type="module">
+      import { Chroniko } from '../src/chroniko.js';
+
+      // Local times on 4 November 2026. The last two use an offset and a Z,
+      // so they are exact instants, shown in your own time zone.
+      const day = '2026-11-04';
+      const events = [
+        { id: 'backup', title: 'Nightly backup', start: `${day}T01:00`, end: `${day}T02:47`, category: 'job', tags: ['database'] },
+        { id: 'vacuum', title: 'Database vacuum', start: `${day}T02:50`, end: `${day}T03:35`, category: 'job', tags: ['database'] },
+        { id: 'reports', title: 'Daily reports', start: `${day}T05:00`, end: `${day}T05:42:10`, category: 'job', tags: ['reports'] },
+        { id: 'cert', title: 'TLS certificate renewed', start: `${day}T06:15`, category: 'job', tags: ['edge'] },
+        { id: 'api-1', title: 'Deploy api v2.14.0', start: `${day}T09:02:30`, end: `${day}T09:14:05`, category: 'deploy', tags: ['api'],
+          description: 'Rolling deploy to 12 instances.' },
+        { id: 'web-1', title: 'Deploy web v5.3.1', start: `${day}T09:30`, end: `${day}T09:41`, category: 'deploy', tags: ['web'] },
+        { id: 'latency', title: 'p99 latency above 800 ms', start: `${day}T10:12:44`, end: `${day}T10:31:02`, category: 'alert', tags: ['api'] },
+        { id: 'inc-1', title: 'Checkout errors', start: `${day}T10:18`, end: `${day}T11:05`, category: 'incident', tags: ['api', 'payments'],
+          description: 'A slow payment provider timed out checkout requests. Mitigated by raising the timeout and retrying.' },
+        { id: 'rollback', title: 'Roll back api to v2.13.2', start: `${day}T10:26:15`, end: `${day}T10:33:40`, category: 'deploy', tags: ['api'] },
+        { id: 'postmortem', title: 'Incident review', start: `${day}T14:00`, end: `${day}T15:00`, category: 'incident', tags: ['payments'] },
+        { id: 'disk', title: 'Disk 85% full on db-2', start: `${day}T13:07:09`, category: 'alert', tags: ['database'] },
+        { id: 'api-2', title: 'Deploy api v2.14.1', start: `${day}T16:45`, end: `${day}T16:58:30`, category: 'deploy', tags: ['api'],
+          description: 'Fixes the checkout timeout from this morning.' },
+        { id: 'cache', title: 'Cache warm-up', start: `${day}T17:00`, end: `${day}T17:20`, category: 'job', tags: ['edge'] },
+        { id: 'web-2', title: 'Deploy web v5.3.2', start: `${day}T18:10`, end: `${day}T18:19`, category: 'deploy', tags: ['web'] },
+        { id: 'traffic', title: 'Traffic spike', start: `${day}T20:00`, end: `${day}T21:30`, category: 'alert', tags: ['edge'] },
+        { id: 'maint', title: 'Maintenance window', start: `${day}T22:00+00:00`, end: `${day}T23:30+00:00`, category: 'incident',
+          description: 'Scheduled for 22:00–23:30 UTC, so it moves with your time zone.' },
+        { id: 'heartbeat', title: 'Heartbeat missed', start: `${day}T23:59:58.250Z`, category: 'alert' },
+        { id: 'oncall', title: 'On-call shift', start: day, end: day, category: 'job',
+          description: 'A date without a time covers the whole day, like an all-day calendar event.' },
+      ];
+
+      const params = new URLSearchParams(location.search);
+      const language = params.get('lang') ?? 'en';
+      const langSelect = document.querySelector('#lang');
+      langSelect.value = language;
+      langSelect.addEventListener('change', () => {
+        const url = new URL(location.href);
+        url.searchParams.set('lang', langSelect.value);
+        location.assign(url);
+      });
+
+      window.timeline = new Chroniko('#timeline', {
+        timeScale: 'clock',
+        events,
+        language,
+        colors: { deploy: '#4e79a7', job: '#59a14f', incident: '#e15759', alert: '#f28e2b' },
+        syncUrl: true,
+        textSizeToggle: true,
+      });
+    </script>
+  </body>
+</html>

@@ -23,6 +23,8 @@ npm start   # http://localhost:3000/
 
 Add `?story=right` to the example's URL to see the [story beside the timeline](#story-beside-the-timeline), or `?lang=ja` (any [language code](#languages)) to see the UI in another language. Both can be combined, e.g. `?story=right&lang=zh-Hant`.
 
+A second page, `http://localhost:3000/examples/clock.html`, shows a day of deploys, jobs and incidents on the [clock time scale](#clock-time-scale).
+
 ## Usage
 
 The minified files can be loaded from jsDelivr without installing anything.
@@ -60,7 +62,7 @@ The minified files can be loaded from jsDelivr without installing anything.
 | Field         | Required | Notes |
 | ------------- | -------- | ----- |
 | `title`       | yes      | |
-| `start`       | yes      | Year number, `"YYYY"`, `"YYYY-MM"` or `"YYYY-MM-DD"`. Negative years are BCE. A date that doesn't exist (month 13, 31 April) throws an error naming the event. 29 February is accepted in any year, since historical dates may follow the Julian calendar. |
+| `start`       | yes      | A date in the time scale's format, e.g. `"1453-05-29"` or `-221`. See [Historical time scale](#historical-time-scale) and [Clock time scale](#clock-time-scale). An invalid date throws an error naming the event. |
 | `end`         | no       | Same formats as `start`. If set, the event is drawn as a bar. |
 | `id`          | no       | Must be unique. See [Event ids](#event-ids). |
 | `category`    | no       | Used for colors and the legend filter. |
@@ -86,11 +88,12 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 | Option              | Type                 | Required | Default | Notes |
 | ------------------- | -------------------- | -------- | ------- | ----- |
 | `events`            | `object[]`           | no       | `[]`    | Array of events. See [Event fields](#event-fields). |
-| `start`             | `number \| string`   | no       | Fit all events | Start of the initial visible range. Same formats as event dates, or a fractional year. Only used if `end` is also set. |
+| `timeScale`         | `'historical' \| 'clock'` | no  | `'historical'` | `'historical'` for years, months and days, BCE included. `'clock'` for timelines measured in days, hours, minutes and seconds. See [Historical time scale](#historical-time-scale) and [Clock time scale](#clock-time-scale). |
+| `start`             | `number \| string`   | no       | Fit all events | Start of the initial visible range. Same formats as event dates, or a fractional year (epoch ms on the clock scale). Only used if `end` is also set. |
 | `end`               | `number \| string`   | no       | Fit all events | End of the initial visible range. Only used if `start` is also set. |
 | `colors`            | `object`             | no       | `{}`    | Category → color, e.g. `{ war: '#c0392b' }`. Categories without a color get one from the built-in palette. |
-| `minSpan`           | `number`             | no       | `1/12` (one month) | Smallest visible span in years. |
-| `maxSpan`           | `number`             | no       | 3× the data span, at least 100 years | Largest visible span in years. |
+| `minSpan`           | `number`             | no       | `1/12` (one month); clock: `1000` (one second) | Smallest visible span, in years (ms on the clock scale). |
+| `maxSpan`           | `number`             | no       | 3× the data span, at least 100 years (clock: one day) | Largest visible span, in years (ms on the clock scale). |
 | `onSelectionChange` | `function(events)`   | no       | N/A     | Called with the selected events in chronological order. |
 | `syncUrl`           | `boolean`            | no       | `false` | Keep the view, selection and hidden categories in the URL hash. See [Sharing](#sharing). |
 | `storyPosition`     | `'below' \| 'right'` | no       | `'below'` | Where the [story](#story-view) goes. See [Story beside the timeline](#story-beside-the-timeline). |
@@ -129,9 +132,58 @@ timeline.removeEvents(id);
 - Events added later than all others keep the lanes of those already shown. An earlier event, an update or a removal rearranges the lanes.
 - The legend, tag bar and story are redrawn once per animation frame, however many calls were made in it, so adding events one at a time is cheap.
 
+### Historical time scale
+
+The default, `timeScale: 'historical'`, is for history measured in years, months and days, from BCE to today:
+
+```js
+new Chroniko('#timeline', {
+  events: [
+    { title: 'Qin unifies China', start: -221, category: 'politics' },
+    { title: 'Fall of Constantinople', start: '1453-05-29', category: 'war' },
+    { title: 'Hundred Years\' War', start: '1337', end: '1453', category: 'war' },
+    { title: 'Moon landing', start: { year: 1969, month: 7, day: 20 }, category: 'science' },
+  ],
+});
+```
+
+- **Dates** are a year number, `"YYYY"`, `"YYYY-MM"`, `"YYYY-MM-DD"` or an object `{ year, month?, day? }`. Negative years are BCE, e.g. `-221` or `"-44-03-15"`.
+- **Calendar:** a date that doesn't exist, such as month 13 or 31 April, throws an error naming the event. 29 February is accepted in any year, since historical dates may follow the Julian calendar.
+- **Precision** comes from the input: a year, a month or a day. The story shows each date at that precision, e.g. "1337", "Mar 1644" or "29 May 1453".
+- **Range ends** cover the whole of their last year, month or day, so `end: '1453'` reaches the end of 1453.
+- **Durations** use the coarser precision of the two dates and show at most two units, e.g. "116 years" or "2 years, 11 months". There is no year zero, so 27 BCE to 14 CE lasted 40 years.
+- **The axis** steps from months and quarters (labelled with month names, and the year at January) up to thousands of years.
+- **Positions** in `getState()`, `minSpan`, `maxSpan` and the `ck-view` URL parameter are fractional years, e.g. `1453.5` is the middle of 1453. `zoomTo` and `setState` take any historical date or a fractional year.
+- `parseDate(input)`, `formatDate(date, language)`, `formatDuration(start, end, language)` and `formatYear(year, language)` are exported to read and write dates the same way; `language` defaults to `'en'`.
+
+### Clock time scale
+
+For deploys, jobs, incidents and other events measured in hours, minutes and seconds, set `timeScale: 'clock'`:
+
+```js
+new Chroniko('#timeline', {
+  timeScale: 'clock',
+  events: [
+    { title: 'Deploy api v2.14.0', start: '2026-11-04T09:02:30', end: '2026-11-04T09:14:05', category: 'deploy' },
+    { title: 'Checkout errors', start: '2026-11-04T10:18+08:00', end: '2026-11-04T11:05+08:00', category: 'incident' },
+    { title: 'Heartbeat missed', start: 1793836798250, category: 'alert' },
+  ],
+});
+```
+
+- **Dates** are epoch ms, `Date` objects or ISO strings: `"2026-11-04"`, `"2026-11-04T09:02"`, `"2026-11-04T09:02:30.250Z"`, `"2026-11-04 09:02+08:00"`.
+- **Strings with `Z` or an offset are exact.** Strings without one, including date-only strings, are read in the viewer's local time. This differs from JavaScript, which reads `"2026-11-04"` as UTC midnight. For data from servers, prefer epoch ms or strings with an offset, so every viewer sees the same instant.
+- **Times are shown in local time**, on a 24-hour clock. The axis names the time zone, e.g. `GMT+8`, so screenshots aren't ambiguous.
+- **Precision** comes from the input: a date, minutes, seconds or ms (for numbers and `Date`s). The story shows times at that precision, and "lasted …" uses the coarser of the two, e.g. "11 minutes, 35 seconds".
+- **Range ends:** a timed `end` is the instant itself. A date-only `end` covers that whole day, like an all-day calendar event.
+- **Durations** count days, months and years on the calendar, and hours and less as the time that actually passed. So 01:00 to 04:00 on the night the clocks go forward lasted 2 hours.
+- **The axis** steps from seconds to years. Day and longer steps fall on local midnight, so a day with a daylight saving change is 23 or 25 hours wide.
+- **Positions** in `getState()`, `minSpan`, `maxSpan` and the `ck-view` URL parameter are epoch ms. `zoomTo` and `setState` take any clock date.
+- `parseTime(input)` is exported alongside `parseDate`. `formatDate` and `formatDuration` accept its results too.
+
 ### Sharing
 
-`getState()` returns `{ start, end, selected, hidden }`: the visible range in fractional years (e.g. `1453.5` is mid-1453; negative is BCE), the selected event ids in chronological order, and the hidden categories. `setState(state)` restores it. Every field is optional, so `setState({ selected: ['ww2'] })` changes only the selection; unknown ids are ignored. Use these to save a story yourself, for example in `localStorage` or your own URL format.
+`getState()` returns `{ start, end, selected, hidden }`: the visible range (in fractional years on the [historical](#historical-time-scale) scale, or epoch ms on the [clock](#clock-time-scale) scale), the selected event ids in chronological order, and the hidden categories. `setState(state)` restores it. Every field is optional, so `setState({ selected: ['ww2'] })` changes only the selection; unknown ids are ignored. Use these to save a story yourself, for example in `localStorage` or your own URL format.
 
 With `syncUrl: true`, the timeline keeps this state in the URL hash, so the address bar is always a shareable link:
 
@@ -153,7 +205,7 @@ Events keep their row while you pan. While a wheel, trackpad or touch zoom is in
 
 ### Story view
 
-Clicking an event toggles its selection. Selected events are listed below the timeline (or beside it, see below) in chronological order. Each event appears at its start date, and an event with an `end` also gets a small "End of …" marker at its end date, showing how long it lasted (e.g. "lasted 2 years, 11 months"); clicking the marker jumps to the event's card. Durations use the coarser precision of the two dates (a year-only date gives whole years) and show at most two units. There is no year zero, so 27 BCE to 14 CE lasted 40 years. The same text is available as `formatDuration(parseDate(start), parseDate(end), language)`, exported alongside `parseDate`, `formatDate(date, language)` and `formatYear(year, language)`; `language` defaults to `'en'`. **Show on timeline** on a card calls `reveal(id)` for that event. Hovering or focusing an event, its card or its end marker highlights all three. Press Esc or **Clear all** to clear the selection.
+Clicking an event toggles its selection. Selected events are listed below the timeline (or beside it, see below) in chronological order. Each event appears at its start date, and an event with an `end` also gets a small "End of …" marker at its end date, showing how long it lasted (e.g. "lasted 2 years, 11 months"; see how durations are counted on the [historical](#historical-time-scale) and [clock](#clock-time-scale) scales); clicking the marker jumps to the event's card. **Show on timeline** on a card calls `reveal(id)` for that event. Hovering or focusing an event, its card or its end marker highlights all three. Press Esc or **Clear all** to clear the selection.
 
 #### Story beside the timeline
 

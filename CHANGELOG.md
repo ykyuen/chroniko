@@ -2,6 +2,15 @@
 
 All notable changes to Chroniko are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `timeScale: 'clock'`: timelines measured in days, hours, minutes and seconds, for deploys, jobs, incidents and other events. Dates are epoch ms, `Date` objects or ISO strings. Strings with `Z` or an offset are exact. Strings without one, including date-only strings, are read in local time. Times are shown in local time on a 24-hour clock, and the axis names the time zone (e.g. `GMT+8`). The axis steps from 1 second to years, with day and longer steps on local midnight, so a day with a daylight saving change is 23 or 25 hours wide. A date-only `end` covers the whole day. `getState()`, `minSpan`, `maxSpan` and the `ck-view` URL parameter use epoch ms. The default `timeScale: 'historical'` works as before.
+- `parseTime(input)`: parses clock dates. `formatDate` and `formatDuration` accept its results as well as `parseDate`'s. Clock durations count days, months and years on the calendar, and hours, minutes and seconds as the time that actually passed.
+- New locale strings in all 13 languages, which `uiText` can override: hour, minute and second units, "less than an hour/minute/second", `dateTime(date, time)` and `dayMonth(day, month)`.
+- A second example page, `examples/clock.html`, with a day of deploys, jobs, incidents and alerts.
+
 ## [0.4.1] - 2026-11-04
 
 ### Fixed
@@ -79,6 +88,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - Initial release.
 
+[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.4.1...HEAD
 [0.4.1]: https://github.com/ykyuen/chroniko/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/ykyuen/chroniko/compare/0.3.1...0.4.0
 [0.3.1]: https://github.com/ykyuen/chroniko/compare/0.3.0...0.3.1
