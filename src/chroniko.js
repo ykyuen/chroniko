@@ -19,7 +19,7 @@
 
 import LOCALES from './locales/index.js';
 import historical, { parseDate, dateText, durationText } from './scales/historical.js';
-import { parseTime, timeText } from './scales/clock.js';
+import { parseTime, timeText, timeDurationText } from './scales/clock.js';
 
 export { parseDate, parseTime };
 
@@ -70,13 +70,18 @@ export function formatDate(d, language = 'en') {
 }
 
 /**
- * How long a range lasted, e.g. "116 years" or "2 years, 11 months", at the
- * coarser precision of its two dates and in at most two adjacent units.
- * There is no year zero: 1 BCE (year -1) is followed by 1 CE, so 27 BCE to
- * 14 CE is 40 years. Returns "" if end is before start.
+ * How long a range lasted, e.g. "116 years", "2 years, 11 months" or
+ * "2 hours, 5 minutes", at the coarser precision of its two dates and in at
+ * most two adjacent units. Both dates come from parseDate(), or both from
+ * parseTime(). There is no year zero: 1 BCE (year -1) is followed by 1 CE, so
+ * 27 BCE to 14 CE is 40 years. Returns "" if end is before start.
  */
 export function formatDuration(start, end, language = 'en') {
-  return durationText(start, end, messagesFor(language));
+  const clock = start.scale === 'clock';
+  if (clock !== (end.scale === 'clock')) {
+    throw new Error('Chroniko: formatDuration needs two parseDate() results or two parseTime() results, not one of each');
+  }
+  return (clock ? timeDurationText : durationText)(start, end, messagesFor(language));
 }
 
 // Anything but a plain object (null, a string, an array) would otherwise fail

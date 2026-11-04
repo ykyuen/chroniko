@@ -28,12 +28,23 @@ export default {
   year: (y) => (y < 0 ? `${-y} a.C.` : String(y)),
   month: (month, year) => `${month} ${year}`,
   day: (day, month, year) => `${day} ${month} ${year}`,
+  dateTime: (date, time) => `${date}, ${time}`,
 
   units: {
     year: { one: '# ano', other: '# anos' },
     month: { one: '# mês', other: '# meses' },
     day: { one: '# dia', other: '# dias' },
+    hour: { one: '# hora', other: '# horas' },
+    minute: { one: '# minuto', other: '# minutos' },
+    second: { one: '# segundo', other: '# segundos' },
   },
   unitJoin: ' e ',
-  lessThan: { year: 'menos de um ano', month: 'menos de um mês', day: 'menos de um dia' },
+  lessThan: {
+    year: 'menos de um ano',
+    month: 'menos de um mês',
+    day: 'menos de um dia',
+    hour: 'menos de uma hora',
+    minute: 'menos de um minuto',
+    second: 'menos de um segundo',
+  },
 };

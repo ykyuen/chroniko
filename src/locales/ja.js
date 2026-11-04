@@ -27,12 +27,23 @@ export default {
   year: (y) => (y < 0 ? `紀元前${-y}年` : `${y}年`),
   month: (month, year) => `${year}${month}`,
   day: (day, month, year) => `${year}${month}${day}日`,
+  dateTime: (date, time) => `${date} ${time}`,
 
   units: {
     year: { other: '#年' },
     month: { other: '#か月' },
     day: { other: '#日' },
+    hour: { other: '#時間' },
+    minute: { other: '#分' },
+    second: { other: '#秒' },
   },
   unitJoin: '',
-  lessThan: { year: '1年未満', month: '1か月未満', day: '1日未満' },
+  lessThan: {
+    year: '1年未満',
+    month: '1か月未満',
+    day: '1日未満',
+    hour: '1時間未満',
+    minute: '1分未満',
+    second: '1秒未満',
+  },
 };

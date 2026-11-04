@@ -3,7 +3,7 @@
 
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseTime, formatDate } from '../src/chroniko.js';
+import { parseDate, parseTime, formatDate, formatDuration } from '../src/chroniko.js';
 import clock from '../src/scales/clock.js';
 
 const HOUR = 3_600_000;
@@ -124,11 +124,68 @@ describe('formatDate in other languages', () => {
   inZone('Asia/Hong_Kong');
 
   test('uses the locale for the date and Intl for the time', () => {
-    assert.equal(formatDate(parseTime('2026-10-28T09:05'), 'zh-Hant'), '2026年10月28日, 09:05');
+    assert.equal(formatDate(parseTime('2026-10-28T09:05'), 'zh-Hant'), '2026年10月28日 09:05');
+    assert.equal(formatDate(parseTime('2026-10-28T09:05'), 'fr'), formatDate(parseTime('2026-10-28'), 'fr') + ' à 09:05');
     assert.equal(formatDate(parseTime('2026-10-28T09:05:07.5'), 'de'), formatDate(parseTime('2026-10-28'), 'de') + ', 09:05:07,500');
   });
 
   test('historical dates are unchanged', () => {
     assert.equal(formatDate({ year: 1453, month: 5, day: 29, precision: 'day', value: 1453.4 }), '29 May 1453');
+  });
+});
+
+const duration = (a, b, language) => formatDuration(parseTime(a), parseTime(b), language);
+
+describe('formatDuration', () => {
+  inZone('Asia/Hong_Kong');
+
+  test('uses the coarser precision and at most two adjacent units', () => {
+    assert.equal(duration('2026-10-28T10:00', '2026-10-28T12:05'), '2 hours, 5 minutes');
+    assert.equal(duration('2026-10-28T10:00:00', '2026-10-28T10:04:12'), '4 minutes, 12 seconds');
+    assert.equal(duration('2026-10-28T10:00:00', '2026-10-28T10:04'), '4 minutes');
+    assert.equal(duration('2026-10-28T10:00', '2026-10-29T13:00'), '1 day, 3 hours');
+    assert.equal(duration('2026-10-28T10:00', '2026-10-29T10:30'), '1 day'); // hours are 0, so minutes aren't shown
+    assert.equal(duration('2026-10-28', '2026-10-29T10:30'), '1 day');
+    assert.equal(duration('2025-08-28', '2026-10-30'), '1 year, 2 months');
+    assert.equal(duration(1793154600000, 1793154600000 + 2_500), '2 seconds');
+  });
+
+  test('counts calendar months, from the last day of a shorter month', () => {
+    assert.equal(duration('2026-01-31', '2026-02-28'), '1 month');
+    assert.equal(duration('2026-01-31', '2026-03-01'), '1 month, 1 day');
+    assert.equal(duration('2026-01-31T10:00', '2026-02-28T09:00'), '27 days, 23 hours');
+    assert.equal(duration('2025-12-15', '2026-01-14'), '30 days');
+  });
+
+  test('less than one unit, or a negative range', () => {
+    assert.equal(duration('2026-10-28', '2026-10-28'), 'less than a day');
+    assert.equal(duration('2026-10-28T10:00', '2026-10-28T10:00'), 'less than a minute');
+    assert.equal(duration(0, 999), 'less than a second');
+    assert.equal(duration('2026-10-28T10:00', '2026-10-28T09:00'), '');
+  });
+
+  test('uses the language', () => {
+    assert.equal(duration('2026-10-28T10:00', '2026-10-28T12:05', 'zh-Hant'), '2小時5分鐘');
+    assert.equal(duration('2026-10-28T10:00', '2026-10-28T15:00', 'pl'), '5 godzin');
+    assert.equal(duration('2026-10-28T10:00', '2026-10-28T11:00', 'fr'), '1 heure');
+  });
+
+  test('throws on a historical date and a clock time together', () => {
+    assert.throws(() => formatDuration(parseDate('1453'), parseTime('2026-10-28')), { message: /two parseDate\(\) results or two parseTime\(\) results/ });
+  });
+});
+
+describe('formatDuration across DST in America/New_York', () => {
+  inZone('America/New_York');
+
+  test('hours are the time that passed', () => {
+    assert.equal(duration('2026-03-08T01:00', '2026-03-08T04:00'), '2 hours');
+    assert.equal(duration('2026-11-01T00:00', '2026-11-01T03:00'), '4 hours');
+  });
+
+  test('days follow the calendar', () => {
+    assert.equal(duration('2026-03-07T12:00', '2026-03-08T12:00'), '1 day');
+    assert.equal(duration('2026-03-08', '2026-03-09'), '1 day');
+    assert.equal(duration('2026-02-15T12:00', '2026-03-15T11:00'), '27 days, 23 hours');
   });
 });

@@ -8,6 +8,7 @@
 
 import LOCALES from '../locales/index.js';
 import { local } from '../zone.js';
+import { durationWords } from './duration.js';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -96,11 +97,58 @@ export function timeText(d, m, zone = local) {
   let time = `${pad(hour)}:${pad(minute)}`;
   if (d.precision !== 'minute') time += `:${pad(second)}`;
   if (d.precision === 'ms') time += `${decimalMark(m)}${String(ms).padStart(3, '0')}`;
-  return `${date}, ${time}`;
+  return m.dateTime(date, time);
 }
 
 function decimalMark(m) {
   return m.number.formatToParts(1.5).find((p) => p.type === 'decimal')?.value ?? '.';
+}
+
+const UNITS = ['year', 'month', 'day', 'hour', 'minute', 'second'];
+// The smallest unit a duration shows for each precision.
+const SMALLEST = { day: 'day', minute: 'minute', second: 'second', ms: 'second' };
+
+/**
+ * How long a range of two parseTime() results lasted, e.g. "2 hours,
+ * 5 minutes", at the coarser precision of the two and in at most two
+ * adjacent units. Years, months and days are counted on the calendar in the
+ * zone, so "1 month" is a calendar month and "1 day" may be 23 or 25 hours
+ * across a DST change. Hours and smaller are the time that actually passed,
+ * so 01:00 to 04:00 on the night clocks go forward is 2 hours.
+ * Returns "" if end is before start.
+ */
+export function timeDurationText(start, end, m, zone = local) {
+  if (end.value < start.value) return '';
+  const unit = UNITS[Math.min(UNITS.indexOf(SMALLEST[start.precision]), UNITS.indexOf(SMALLEST[end.precision]))];
+  const s = zone.fields(start.value);
+  const e = zone.fields(end.value);
+
+  // start moved on by whole months, then days. A start day past the end of
+  // the target month counts from its last day: 31 Jan + 1 month is 28 Feb.
+  const shifted = (months, days = 0) => {
+    const index = s.month - 1 + months;
+    const year = s.year + Math.floor(index / 12);
+    const month = (index % 12) + 1;
+    return zone.instant({ ...s, year, month, day: Math.min(s.day, daysInMonth(year, month)) + days });
+  };
+  // The calendar difference in months is at most one too many.
+  let months = (e.year - s.year) * 12 + e.month - s.month;
+  if (months > 0 && shifted(months) > end.value) months -= 1;
+  // At most one DST change lies within a month, so one day more than the
+  // elapsed whole days is an upper bound.
+  let days = Math.floor((end.value - shifted(months)) / DAY) + 1;
+  while (days > 0 && shifted(months, days) > end.value) days -= 1;
+
+  const rest = end.value - shifted(months, days);
+  const parts = [
+    ['year', Math.floor(months / 12)],
+    ['month', months % 12],
+    ['day', days],
+    ['hour', Math.floor(rest / HOUR)],
+    ['minute', Math.floor(rest / MINUTE) % 60],
+    ['second', Math.floor(rest / 1000) % 60],
+  ];
+  return durationWords(parts.slice(0, UNITS.indexOf(unit) + 1), m);
 }
 
 export default {
@@ -115,6 +163,7 @@ export default {
   },
 
   formatDate: timeText,
+  formatDuration: timeDurationText,
 
   minSpan: 1000, // a second
   maxSpan: (dataSpan) => Math.max(dataSpan * 3, DAY),

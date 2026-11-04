@@ -26,12 +26,23 @@ export default {
   year: (y) => (y < 0 ? `기원전 ${-y}년` : `${y}년`),
   month: (month, year) => `${year} ${month}`,
   day: (day, month, year) => `${year} ${month} ${day}일`,
+  dateTime: (date, time) => `${date} ${time}`,
 
   units: {
     year: { other: '#년' },
     month: { other: '#개월' },
     day: { other: '#일' },
+    hour: { other: '#시간' },
+    minute: { other: '#분' },
+    second: { other: '#초' },
   },
   unitJoin: ' ',
-  lessThan: { year: '1년 미만', month: '1개월 미만', day: '1일 미만' },
+  lessThan: {
+    year: '1년 미만',
+    month: '1개월 미만',
+    day: '1일 미만',
+    hour: '1시간 미만',
+    minute: '1분 미만',
+    second: '1초 미만',
+  },
 };

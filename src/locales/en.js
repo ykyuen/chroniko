@@ -36,13 +36,24 @@ export default {
   year: (y) => (y < 0 ? `${-y} BCE` : String(y)),
   month: (month, year) => `${month} ${year}`,
   day: (day, month, year) => `${day} ${month} ${year}`,
+  dateTime: (date, time) => `${date}, ${time}`,
 
   // Durations, e.g. "2 years, 11 months"
   units: {
     year: { one: '# year', other: '# years' },
     month: { one: '# month', other: '# months' },
     day: { one: '# day', other: '# days' },
+    hour: { one: '# hour', other: '# hours' },
+    minute: { one: '# minute', other: '# minutes' },
+    second: { one: '# second', other: '# seconds' },
   },
   unitJoin: ', ',
-  lessThan: { year: 'less than a year', month: 'less than a month', day: 'less than a day' },
+  lessThan: {
+    year: 'less than a year',
+    month: 'less than a month',
+    day: 'less than a day',
+    hour: 'less than an hour',
+    minute: 'less than a minute',
+    second: 'less than a second',
+  },
 };

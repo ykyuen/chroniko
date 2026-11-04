@@ -8,6 +8,7 @@
 // take the UI messages `m` (see messagesFor in chroniko.js).
 
 import LOCALES from '../locales/index.js';
+import { durationWords } from './duration.js';
 
 const UNIT = { year: 1, month: 1 / 12, day: 1 / 372 };
 const TICK_STEPS = [1 / 12, 1 / 4, ...[1, 10, 100, 1000, 10000, 100000].flatMap((p) => [p, 2 * p, 5 * p])];
@@ -94,15 +95,10 @@ export function durationText(start, end, m) {
   }
   if (years < 0) return '';
   const parts = [['year', years], ['month', months], ['day', days]];
-  const first = parts.findIndex(([, n]) => n > 0);
-  if (first < 0) return m.lessThan[unit];
-  const amount = ([name, n]) => {
-    const forms = m.units[name];
-    return (forms[m.plural.select(n)] ?? forms.other).replace('#', m.number.format(n));
-  };
-  const next = parts[first + 1];
-  return next?.[1] > 0 ? `${amount(parts[first])}${m.unitJoin}${amount(next)}` : amount(parts[first]);
+  return durationWords(parts.slice(0, UNITS.indexOf(unit) + 1), m);
 }
+
+const UNITS = ['year', 'month', 'day'];
 
 // Days in a month of a proleptic Gregorian astronomical year; month 0 is the
 // previous year's December.

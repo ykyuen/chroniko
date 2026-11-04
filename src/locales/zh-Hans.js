@@ -26,12 +26,23 @@ export default {
   year: (y) => (y < 0 ? `公元前${-y}年` : `${y}年`),
   month: (month, year) => `${year}${month}`,
   day: (day, month, year) => `${year}${month}${day}日`,
+  dateTime: (date, time) => `${date} ${time}`,
 
   units: {
     year: { other: '#年' },
     month: { other: '#个月' },
     day: { other: '#天' },
+    hour: { other: '#小时' },
+    minute: { other: '#分钟' },
+    second: { other: '#秒' },
   },
   unitJoin: '',
-  lessThan: { year: '不足一年', month: '不足一个月', day: '不足一天' },
+  lessThan: {
+    year: '不足一年',
+    month: '不足一个月',
+    day: '不足一天',
+    hour: '不足一小时',
+    minute: '不足一分钟',
+    second: '不足一秒',
+  },
 };
