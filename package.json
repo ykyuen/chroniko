@@ -12,6 +12,7 @@
   "scripts": {
     "start": "node scripts/serve.js",
     "build": "webpack",
+    "test": "node --test test/",
     "prepack": "npm run build"
   },
   "keywords": [

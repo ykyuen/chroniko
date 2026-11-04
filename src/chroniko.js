@@ -14,15 +14,15 @@
 
 // Chroniko: render historical events on a single zoomable time axis.
 //
-// Dates are converted to fractional years ("values"), e.g. 1453-05-29 → ~1453.41.
-// Negative years are BCE. Year zero is not skipped, so positions across the
-// BCE/CE boundary are off by one year, which is invisible at historical scales.
+// Dates are converted to numbers ("values") by the timeline's scale, which
+// also draws the axis and writes dates and durations; see src/scales/.
 
 import LOCALES from './locales/index.js';
+import historical, { parseDate, dateText, durationText } from './scales/historical.js';
+
+export { parseDate };
 
 const PALETTE = ['#4e79a7', '#e15759', '#59a14f', '#f28e2b', '#b07aa1', '#76b7b2', '#edc948', '#9c755f'];
-const UNIT = { year: 1, month: 1 / 12, day: 1 / 372 };
-const TICK_STEPS = [1 / 12, 1 / 4, ...[1, 10, 100, 1000, 10000, 100000].flatMap((p) => [p, 2 * p, 5 * p])];
 const MIN_TICK_GAP = 90; // px between axis labels
 const LANE_HEIGHT = 30; // px, matches .ck-event height + spacing in CSS
 const LANE_TOP = 12; // px above the first lane
@@ -30,56 +30,6 @@ const DOT = 10; // px, point marker diameter
 const LABEL_PAD = 6; // px between marker and label
 const LANE_GAP = 12; // px kept free after a label before the next event in the lane
 const FLASH_MS = 1500; // matches the .ck-event.ck-flash animation in CSS
-
-/**
- * Parse a historical date.
- * Accepts a number (year), a string "YYYY", "YYYY-MM" or "YYYY-MM-DD" (negative
- * year for BCE, e.g. "-44-03-15"), or an object { year, month?, day? }.
- * Throws if the date doesn't exist, e.g. month 13 or 31 April. 29 February is
- * accepted in any year, since historical dates may use the Julian calendar.
- */
-export function parseDate(input) {
-  if (input == null || input === '') return null;
-  const shown = typeof input === 'object' ? JSON.stringify(input) : typeof input === 'string' ? `"${input}"` : String(input);
-  let year, month, day;
-  if (typeof input === 'number') {
-    // Any finite number, so fractional years from getState() work too.
-    if (!Number.isFinite(input)) throw new Error(`Chroniko: invalid date ${shown}`);
-    return withValue(input);
-  }
-  if (typeof input === 'object') {
-    ({ year, month, day } = input);
-  } else {
-    const m = /^(-?\d+)(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/.exec(String(input).trim());
-    if (!m) throw new Error(`Chroniko: cannot parse date ${shown}`);
-    [year, month, day] = [Number(m[1]), m[2] && Number(m[2]), m[3] && Number(m[3])];
-  }
-  const problem = dateProblem(year, month ?? null, day ?? null);
-  if (problem) throw new Error(`Chroniko: invalid date ${shown}: ${problem}`);
-  return withValue(year, month, day);
-}
-
-const MAX_DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-
-function dateProblem(year, month, day) {
-  if (!Number.isInteger(year)) return 'year must be a whole number';
-  if (month != null && !(Number.isInteger(month) && month >= 1 && month <= 12)) return 'month must be 1–12';
-  if (day != null) {
-    if (month == null) return 'a day needs a month';
-    if (!(Number.isInteger(day) && day >= 1 && day <= MAX_DAYS[month - 1])) {
-      return `day must be 1–${MAX_DAYS[month - 1]} in ${LOCALES.en.months[month - 1]}`;
-    }
-  }
-  return null;
-}
-
-function withValue(year, month, day) {
-  let value = year;
-  if (month) value += (month - 1) / 12;
-  if (day) value += (day - 1) / 372;
-  const precision = day ? 'day' : month ? 'month' : 'year';
-  return { year, month: month || null, day: day || null, precision, value };
-}
 
 // The UI text for a language: the built-in locale over English (so a key it
 // lacks still has text), then the caller's overrides, plus the language's
@@ -114,13 +64,6 @@ export function formatDate(d, language = 'en') {
   return dateText(d, messagesFor(language));
 }
 
-function dateText(d, m) {
-  const year = m.year(d.year);
-  if (d.day) return m.day(d.day, m.months[d.month - 1], year);
-  if (d.month) return m.month(m.months[d.month - 1], year);
-  return year;
-}
-
 /**
  * How long a range lasted, e.g. "116 years" or "2 years, 11 months", at the
  * coarser precision of its two dates and in at most two adjacent units.
@@ -131,51 +74,6 @@ export function formatDuration(start, end, language = 'en') {
   return durationText(start, end, messagesFor(language));
 }
 
-function durationText(start, end, m) {
-  const astro = (y) => (y < 0 ? y + 1 : y); // 1 BCE → 0, 2 BCE → -1, …
-  const precisions = [start.precision, end.precision];
-  const unit = precisions.includes('year') ? 'year' : precisions.includes('month') ? 'month' : 'day';
-  let years = astro(end.year) - astro(start.year);
-  let months = unit === 'year' ? 0 : end.month - start.month;
-  let days = unit === 'day' ? end.day - start.day : 0;
-  if (days < 0) {
-    // Borrow the month before end's. A start day past that month's length
-    // (31 Jan → 1 Mar) counts from its last day, so days never go negative.
-    months -= 1;
-    days = Math.max(daysInMonth(astro(end.year), end.month - 1) - start.day, 0) + end.day;
-  }
-  if (months < 0) {
-    years -= 1;
-    months += 12;
-  }
-  if (years < 0) return '';
-  const parts = [['year', years], ['month', months], ['day', days]];
-  const first = parts.findIndex(([, n]) => n > 0);
-  if (first < 0) return m.lessThan[unit];
-  const amount = ([name, n]) => {
-    const forms = m.units[name];
-    return (forms[m.plural.select(n)] ?? forms.other).replace('#', m.number.format(n));
-  };
-  const next = parts[first + 1];
-  return next?.[1] > 0 ? `${amount(parts[first])}${m.unitJoin}${amount(next)}` : amount(parts[first]);
-}
-
-// Days in a month of a proleptic Gregorian astronomical year; month 0 is the
-// previous year's December.
-function daysInMonth(year, month) {
-  if (month === 0) return 31;
-  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-  return [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
-}
-
-function rangeText(item, m) {
-  const start = dateText(item.start, m);
-  return item.end ? `${start} – ${dateText(item.end, m)}` : start;
-}
-
-// Id for an event without one: its category, lowercased with whitespace runs
-// turned into hyphens, then its position in the input array, e.g.
-// "olympic-game-3". Events without a category use "event", e.g. "event-3".
 // Anything but a plain object (null, a string, an array) would otherwise fail
 // later with a TypeError that doesn't say which call or event was wrong.
 function checkObject(value, what) {
@@ -184,6 +82,9 @@ function checkObject(value, what) {
   throw new Error(`Chroniko: ${what} must be an object, not ${kind}`);
 }
 
+// Id for an event without one: its category, lowercased with whitespace runs
+// turned into hyphens, then its position in the input array, e.g.
+// "olympic-game-3". Events without a category use "event", e.g. "event-3".
 function defaultId(event, index) {
   const prefix = String(event.category ?? '').trim().toLowerCase().replace(/\s+/g, '-') || 'event';
   return `${prefix}-${index}`;
@@ -200,13 +101,6 @@ function hashParams() {
     else params.set(part.slice(0, eq), part.slice(eq + 1));
   }
   return params;
-}
-
-function tickLabel(value, step, m) {
-  if (step >= 1) return m.year(Math.round(value));
-  const year = Math.floor(value + 1e-9);
-  const month = Math.round((value - year) * 12) % 12;
-  return month === 0 ? m.year(year) : m.months[month];
 }
 
 function esc(s) {
@@ -239,7 +133,6 @@ export class Chroniko {
     const el = typeof container === 'string' ? document.querySelector(container) : container;
     if (!el) throw new Error('Chroniko: container not found');
     this.options = {
-      minSpan: 1 / 12,
       colors: {},
       storyPosition: 'below',
       split: 0.6,
@@ -257,6 +150,7 @@ export class Chroniko {
       throw new Error(`Chroniko: split must be a number between 0 and 1, got ${JSON.stringify(split)}`);
     }
     this.m = messagesFor(this.options.language, this.options.uiText);
+    this.scale = historical;
     this.items = [];
     this.hidden = new Set();
     this.selected = new Set();
@@ -376,8 +270,8 @@ export class Chroniko {
    * minSpan/maxSpan is clamped around the range's center.
    */
   zoomTo(start, end) {
-    const from = parseDate(start)?.value;
-    const to = parseDate(end)?.value;
+    const from = this.scale.parse(start)?.value;
+    const to = this.scale.parse(end)?.value;
     if (from == null || to == null) throw new Error('Chroniko: zoomTo needs both a start and an end');
     if (from >= to) throw new Error(`Chroniko: zoomTo start (${start}) must be before end (${end})`);
     const center = (from + to) / 2;
@@ -387,9 +281,9 @@ export class Chroniko {
 
   /** Zoom so every event is visible. */
   fit() {
-    if (!this.items.length) return this._setView(0, 2000);
+    if (!this.items.length) return this._setView(...this.scale.emptyView);
     const [min, max] = this._extent();
-    const span = Math.max(max - min, 1);
+    const span = Math.max(max - min, this.scale.minFitSpan);
     this._setView(min - span * 0.04, max + span * 0.12);
   }
 
@@ -886,8 +780,9 @@ export class Chroniko {
   }
 
   _clampSpan(span) {
-    const max = this.options.maxSpan ?? Math.max(this._dataSpan * 3, 100);
-    return Math.min(Math.max(span, this.options.minSpan), max);
+    const min = this.options.minSpan ?? this.scale.minSpan;
+    const max = this.options.maxSpan ?? this.scale.maxSpan(this._dataSpan);
+    return Math.min(Math.max(span, min), max);
   }
 
   _scale() {
@@ -905,7 +800,7 @@ export class Chroniko {
   _toItem(event, id) {
     const date = (field) => {
       try {
-        return parseDate(event[field]);
+        return this.scale.parse(event[field]);
       } catch (err) {
         const reason = err.message.replace(/^Chroniko: /, '');
         throw new Error(`Chroniko: event "${event.title ?? id}" has an invalid ${field}: ${reason}`);
@@ -920,7 +815,7 @@ export class Chroniko {
       start,
       end,
       from: start.value,
-      to: end ? end.value + UNIT[end.precision] : null,
+      to: end ? this.scale.rangeEnd(end) : null,
       category: event.category ?? null,
       // A single string is one tag; blanks and repeats are dropped.
       tags: [...new Set([event.tags ?? []].flat().map((t) => String(t).trim()).filter(Boolean))],
@@ -1093,13 +988,11 @@ export class Chroniko {
   }
 
   _renderAxis(scale, x) {
-    const step = TICK_STEPS.find((s) => s * scale >= MIN_TICK_GAP) ?? TICK_STEPS.at(-1);
     let ticks = '';
     let lines = '';
-    for (let i = Math.ceil(this.start / step); i * step <= this.end; i++) {
-      const v = i * step;
-      const left = x(v).toFixed(1);
-      ticks += `<span class="ck-tick" style="left:${left}px">${esc(tickLabel(v, step, this.m))}</span>`;
+    for (const { value, label } of this.scale.ticks(this.start, this.end, scale, MIN_TICK_GAP, this.m)) {
+      const left = x(value).toFixed(1);
+      ticks += `<span class="ck-tick" style="left:${left}px">${esc(label)}</span>`;
       lines += `<span class="ck-gridline" style="left:${left}px"></span>`;
     }
     this.axisEl.innerHTML = ticks;
@@ -1139,7 +1032,7 @@ export class Chroniko {
         (flash ? `;animation-delay:-${Math.round(flashAge)}ms` : '');
       const title = esc(it.event.title ?? '');
       const attrs = `type="button" class="${cls}" data-id="${esc(it.id)}" aria-pressed="${on}"
-        title="${title} · ${esc(rangeText(it, this.m))}"`;
+        title="${title} · ${esc(this._rangeText(it))}"`;
       html += isRange
         ? `<button ${attrs} style="${style};width:${Math.max(x2 - x1, 4).toFixed(1)}px">
              <span class="ck-label" style="left:${labelOffset.toFixed(1)}px">${title}</span></button>`
@@ -1233,8 +1126,8 @@ export class Chroniko {
   _storyEnd(item) {
     const m = this.m;
     const title = esc(item.event.title ?? '');
-    const date = esc(dateText(item.end, m));
-    const duration = esc(durationText(item.start, item.end, m));
+    const date = esc(this.scale.formatDate(item.end, m));
+    const duration = esc(this.scale.formatDuration(item.start, item.end, m));
     return `
       <li class="ck-end" style="--ck-color:${esc(item.color)}">
         <button type="button" class="ck-end-jump${this._hoverClass(item)}" data-id="${esc(item.id)}"
@@ -1267,7 +1160,7 @@ export class Chroniko {
                 aria-label="${this.m.remove(esc(e.title ?? ''))}">×</button>
         <div class="ck-meta">
           ${item.category ? `<span class="ck-badge">${esc(this._categoryLabel(item.category))}</span>` : ''}
-          <span>${esc(rangeText(item, this.m))}</span>
+          <span>${esc(this._rangeText(item))}</span>
         </div>
         <h3 class="ck-title">${esc(e.title ?? '')}</h3>
         ${e.description ? `<p class="ck-description">${esc(e.description)}</p>` : ''}
@@ -1277,6 +1170,11 @@ export class Chroniko {
           ${safeUrl ? `<a class="ck-link" href="${esc(safeUrl)}" target="_blank" rel="noopener">${esc(this.m.readMore)}</a>` : ''}
         </div>
       </li>`;
+  }
+
+  _rangeText(item) {
+    const start = this.scale.formatDate(item.start, this.m);
+    return item.end ? `${start} – ${this.scale.formatDate(item.end, this.m)}` : start;
   }
 
   _hoverClass(item) {
