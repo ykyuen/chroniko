@@ -282,7 +282,14 @@ export class Chroniko {
     if (patch.id != null && String(patch.id) !== id) {
       throw new Error(`Chroniko: updateEvent cannot change the id of "${id}"; remove the event and add it again`);
     }
-    const item = this._toItem({ ...this.items[index].event, ...patch }, id);
+    // Dates the patch leaves alone keep their parsed instants. Parsing their
+    // strings again would read offset-free ones in the zone now in use, and
+    // move an event added before a zone switch.
+    const old = this.items[index];
+    const kept = {};
+    if (!Object.hasOwn(patch, 'start')) kept.start = old.start;
+    if (!Object.hasOwn(patch, 'end')) Object.assign(kept, { end: old.end, to: old.to });
+    const item = this._toItem({ ...old.event, ...patch }, id, kept);
     this.items.splice(index, 1);
     this._insert(item);
     this._assignColors([item]);
@@ -907,8 +914,11 @@ export class Chroniko {
   // ---- Event data ------------------------------------------------------------
 
   // The internal record for an event. Throws, naming the event, on bad dates.
-  _toItem(event, id) {
+  // kept holds already parsed dates to use as they are: start, or end with
+  // its range end (to).
+  _toItem(event, id, kept = {}) {
     const date = (field) => {
+      if (Object.hasOwn(kept, field)) return kept[field];
       try {
         return this.scale.parse(event[field]);
       } catch (err) {
@@ -925,7 +935,7 @@ export class Chroniko {
       start,
       end,
       from: start.value,
-      to: end ? this.scale.rangeEnd(end) : null,
+      to: Object.hasOwn(kept, 'to') ? kept.to : end ? this.scale.rangeEnd(end) : null,
       category: event.category ?? null,
       // A single string is one tag; blanks and repeats are dropped.
       tags: [...new Set([event.tags ?? []].flat().map((t) => String(t).trim()).filter(Boolean))],

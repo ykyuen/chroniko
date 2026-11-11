@@ -201,7 +201,7 @@ On the clock scale, times are shown in one of two zones:
 
 - Set the zone with the `timeZone` option or [`setTimeZone()`](#settimezonetimezone). With `timeZones`, a toolbar button shows the zone in use ("Local time" or "UTC") and switches to the next one in the list, wrapping around.
 - Changing the zone moves no event and keeps the view. Only the axis, the story and the tooltips change.
-- A string without `Z` or an offset is read in the zone in use when it's added (by the `events` option, `setEvents`, `addEvents` or `updateEvent`), and keeps that instant when the zone changes. For example, `"2026-11-04"` added in local time in Hong Kong stays at 16:00 UTC on 3 November, and so starts at that time after switching to UTC. `start`, `end`, `zoomTo` and `setState` read such strings in the zone in use too.
+- A string without `Z` or an offset is read in the zone in use when it's added (by the `events` option, `setEvents`, `addEvents`, or an `updateEvent` patch that contains that date), and keeps that instant when the zone changes. For example, `"2026-11-04"` added in local time in Hong Kong stays at 16:00 UTC on 3 November, and so starts at that time after switching to UTC. `start`, `end`, `zoomTo` and `setState` read such strings in the zone in use too.
 - Other zone names, such as IANA names like `'Asia/Tokyo'`, throw in this version.
 - The exported [date helpers](#date-helpers) always use local time.
 

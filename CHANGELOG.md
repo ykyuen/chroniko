@@ -2,6 +2,12 @@
 
 All notable changes to Chroniko are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `updateEvent` no longer moves an event whose dates the patch doesn't change. Before, after a time zone switch, any patch (even one changing only the title) read the event's offset-free `start` and `end` strings again in the new zone, shifting the event by the zone's offset. Dates in the patch are still read in the zone in use.
+
 ## [0.6.0] - 2026-11-11
 
 ### Added
@@ -99,6 +105,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - Initial release.
 
+[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.6.0...HEAD
 [0.6.0]: https://github.com/ykyuen/chroniko/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/ykyuen/chroniko/compare/0.4.1...0.5.0
 [0.4.1]: https://github.com/ykyuen/chroniko/compare/0.4.0...0.4.1
