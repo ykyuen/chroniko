@@ -203,7 +203,9 @@ export class Chroniko {
     this._build(el);
     this._bind();
     this.setEvents(options.events ?? []);
-    if (options.start != null && options.end != null) this.zoomTo(options.start, options.end);
+    if (options.start != null && options.end != null) {
+      this._showRange(this._range(options.start, options.end, 'options'));
+    }
     else this.fit();
     if (this.options.syncUrl) {
       this._onHashChange = () => this._readHash();
@@ -322,12 +324,25 @@ export class Chroniko {
 
   // The positions [from, to] of a range given as dates, read by the scale
   // (the current one unless given). Throws on a missing, invalid or
-  // backwards range.
-  _range(start, end, scale = this.scale) {
-    const from = scale.parse(start)?.value;
-    const to = scale.parse(end)?.value;
-    if (from == null || to == null) throw new Error('Chroniko: zoomTo needs both a start and an end');
-    if (from >= to) throw new Error(`Chroniko: zoomTo start (${start}) must be before end (${end})`);
+  // backwards range, naming the dates as the caller knows them: "zoomTo
+  // start", "setState end", or "the start option" for caller 'options'.
+  _range(start, end, caller = 'zoomTo', scale = this.scale) {
+    const name = (field) => (caller === 'options' ? `the ${field} option` : `${caller} ${field}`);
+    const read = (field, input) => {
+      let parsed;
+      try {
+        parsed = scale.parse(input);
+      } catch (err) {
+        throw new Error(`Chroniko: ${name(field)} is invalid: ${err.message.replace(/^Chroniko: /, '')}`);
+      }
+      if (!parsed) throw new Error(`Chroniko: ${name(field)} is missing`);
+      return parsed.value;
+    };
+    const from = read('start', start);
+    const to = read('end', end);
+    if (from >= to) {
+      throw new Error(`Chroniko: ${name('start')} (${start}) must be before ${name('end')} (${end})`);
+    }
     return [from, to];
   }
 
@@ -462,7 +477,7 @@ export class Chroniko {
     const zone = state.timeZone != null ? this._zoneFor(state.timeZone) : null;
     const range =
       state.start != null && state.end != null
-        ? this._range(state.start, state.end, zone ? clockScale(zone) : this.scale)
+        ? this._range(state.start, state.end, 'setState', zone ? clockScale(zone) : this.scale)
         : null;
     const hidden = state.hidden ? state.hidden.map(String) : null;
     const ids = state.selected ? new Set(state.selected.map(String)) : null;

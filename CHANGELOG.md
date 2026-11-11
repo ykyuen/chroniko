@@ -4,6 +4,10 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 ## [Unreleased]
 
+### Changed
+
+- Errors for a bad visible range name the call and the date that was wrong, e.g. `setState start is invalid: cannot parse time "nope"`, `zoomTo end is missing` or `the start option (1500) must be before the end option (1300)`. Before, `setState` and the `start` and `end` options blamed `zoomTo`, and an unparseable date didn't say where it came from.
+
 ### Fixed
 
 - `updateEvent` no longer moves an event whose dates the patch doesn't change. Before, after a time zone switch, any patch (even one changing only the title) read the event's offset-free `start` and `end` strings again in the new zone, shifting the event by the zone's offset. Dates in the patch are still read in the zone in use.
