@@ -5,6 +5,10 @@ This page covers everything Chroniko exports: the `Chroniko` class, its options 
 > [!NOTE]
 > New features by version:
 >
+> - **0.6.0**
+>   - The [`timeZone`, `timeZones` and `onTimeZoneChange`](#options) options, for [time zones](#time-zones).
+>   - [`setTimeZone`](#settimezonetimezone) and [`getTimeZone`](#gettimezone).
+>   - `timeZone` in [`getState`](#getstate) and [`setState`](#setstatestate), and `ck-tz` in the [URL hash](#url-hash-format).
 > - **0.5.0**
 >   - The [`timeScale`](#options) option, for the [clock scale](#clock-scale).
 >   - [`parseTime`](#parsetimeinput).
@@ -26,6 +30,7 @@ This page covers everything Chroniko exports: the `Chroniko` class, its options 
 - [Methods](#methods)
   - [Events](#events): [`setEvents`](#seteventsevents), [`addEvents`](#addeventsevents), [`updateEvent`](#updateeventid-patch), [`removeEvents`](#removeeventsids)
   - [View](#view): [`zoomTo`](#zoomtostart-end), [`zoomBy`](#zoombyfactor-ratio), [`panBy`](#panbypx), [`fit`](#fit), [`reveal`](#revealid)
+  - [Time zone](#time-zone): [`setTimeZone`](#settimezonetimezone), [`getTimeZone`](#gettimezone)
   - [Selection](#selection): [`select`](#selectid), [`deselect`](#deselectid), [`toggle`](#toggleid), [`clearSelection`](#clearselection), [`getSelection`](#getselection)
   - [State](#state): [`getState`](#getstate), [`setState`](#setstatestate)
   - [Lifecycle](#lifecycle): [`destroy`](#destroy)
@@ -47,9 +52,9 @@ import 'chroniko/chroniko.css';
 
 ```html
 <!-- From a CDN, without installing anything -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chroniko@0.5.0/dist/chroniko.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chroniko@0.6.0/dist/chroniko.min.css">
 <script type="module">
-  import { Chroniko } from 'https://cdn.jsdelivr.net/npm/chroniko@0.5.0/dist/chroniko.min.js';
+  import { Chroniko } from 'https://cdn.jsdelivr.net/npm/chroniko@0.6.0/dist/chroniko.min.js';
 </script>
 ```
 
@@ -97,6 +102,9 @@ Every option is optional.
 | ------------------- | -------------------- | ------- | ----------- |
 | `events`            | `object[]`           | `[]`    | The events to show. See [Event object](#event-object). |
 | `timeScale`         | `'historical' \| 'clock'` | `'historical'` | How dates are read and shown. See [Dates](#dates). Any other value throws. |
+| `timeZone`          | `'local' \| 'UTC'`   | `'local'` | Clock scale only. The zone times are shown in, and offset-free strings read in. See [Time zones](#time-zones). |
+| `timeZones`         | `string[]`           | —       | Clock scale only. Two or more zones for a toolbar button to switch between, e.g. `['local', 'UTC']`. No button when omitted. |
+| `onTimeZoneChange`  | `(timeZone: string) => void` | — | Called when the time zone changes. See [Callbacks](#callbacks). |
 | `start`             | [`DateInput`](#dates) | Fit all events | Start of the first visible range. Only used if `end` is also set. |
 | `end`               | [`DateInput`](#dates) | Fit all events | End of the first visible range. Only used if `start` is also set. |
 | `colors`            | `object`             | `{}`    | Category → CSS color, e.g. `{ war: '#c0392b' }`. Categories without a color get one from the built-in palette. |
@@ -175,12 +183,27 @@ With `timeScale: 'clock'`, a `DateInput` can be any of these:
 | `"YYYY-MM-DDTHH:MM:SS.sss"` | `"2026-11-04T09:02:30.250"` | ms |
 
 - A time can end with `Z` or an offset (`+08:00`, `-0330`), and then it is an exact instant. A space can replace the `T`. More than three fraction digits are cut to ms.
-- **A string without `Z` or an offset is local time**, including a date-only string, which is local midnight. JavaScript's `Date` reads date-only strings as UTC instead. At a daylight saving change, a local time that doesn't exist (02:30 when the clocks go forward) moves forward an hour, and one that happens twice uses the earlier instant.
+- **A string without `Z` or an offset is read in the [time zone](#time-zones)**, local time by default, including a date-only string, which is midnight in that zone. JavaScript's `Date` reads date-only strings as UTC instead. At a daylight saving change, a local time that doesn't exist (02:30 when the clocks go forward) moves forward an hour, and one that happens twice uses the earlier instant.
 - A date or time that doesn't exist, such as 29 February 2026, hour 24 or second 60, throws an error.
 - An `end` with a time is the instant itself. A date-only `end` covers that whole day, like an all-day calendar event.
-- Dates and times are shown in local time, on a 24-hour clock, and the axis names the time zone (e.g. `GMT+8`).
+- Dates and times are shown in the time zone, on a 24-hour clock, and the axis names the zone (e.g. `GMT+8` or `UTC`).
 
 Internally, and in [`getState()`](#getstate), positions on the timeline are **epoch ms**.
+
+### Time zones
+
+On the clock scale, times are shown in one of two zones:
+
+| Zone      | Shown as | Axis label |
+| --------- | -------- | ---------- |
+| `'local'` | The viewer's own time zone, with its daylight saving changes. | e.g. `GMT+8`, `GMT-4`, `GMT+5:30` |
+| `'UTC'`   | Coordinated Universal Time, the same for every viewer. | `UTC` |
+
+- Set the zone with the `timeZone` option or [`setTimeZone()`](#settimezonetimezone). With `timeZones`, a toolbar button shows the zone in use ("Local time" or "UTC") and switches to the next one in the list, wrapping around.
+- Changing the zone moves no event and keeps the view. Only the axis, the story and the tooltips change.
+- A string without `Z` or an offset is read in the zone in use when it's added (by the `events` option, `setEvents`, `addEvents` or `updateEvent`), and keeps that instant when the zone changes. For example, `"2026-11-04"` added in local time in Hong Kong stays at 16:00 UTC on 3 November, and so starts at that time after switching to UTC. `start`, `end`, `zoomTo` and `setState` read such strings in the zone in use too.
+- Other zone names, such as IANA names like `'Asia/Tokyo'`, throw in this version.
+- The exported [date helpers](#date-helpers) always use local time.
 
 ## Methods
 
@@ -303,6 +326,26 @@ Brings an event into view.
 - The page scrolls so the timeline is on screen, and the event is focused and briefly highlighted.
 - An unknown id is ignored.
 
+### Time zone
+
+These need `timeScale: 'clock'`. See [Time zones](#time-zones).
+
+#### `setTimeZone(timeZone)`
+
+Shows times in another zone.
+
+| Parameter  | Type                | Description |
+| ---------- | ------------------- | ----------- |
+| `timeZone` | `'local' \| 'UTC'` | The zone to show. It doesn't have to be listed in `timeZones`. |
+
+Events and the view stay where they are; the axis, story and tooltips are labelled again. Calls [`onTimeZoneChange`](#ontimezonechangetimezone) if the zone changed, and with `syncUrl` updates the URL.
+
+**Throws:** on the historical scale, or if `timeZone` isn't `'local'` or `'UTC'`.
+
+#### `getTimeZone()`
+
+**Returns:** the zone in use, `'local'` or `'UTC'`, or `null` on the historical scale.
+
 ### Selection
 
 Selected events are listed in the story, in chronological order.
@@ -339,6 +382,7 @@ Deselects every event.
   end: number;        // right edge of the view, in fractional years (epoch ms on the clock scale)
   selected: string[]; // selected ids, in chronological order
   hidden: string[];   // hidden categories
+  timeZone?: string;  // clock scale only: 'local' or 'UTC'
 }
 ```
 
@@ -348,9 +392,9 @@ Restores a state from [`getState()`](#getstate).
 
 | Parameter | Type     | Description |
 | --------- | -------- | ----------- |
-| `state`   | `object` | Any of `start` and `end` (both are needed to move the view), `selected`, `hidden`. |
+| `state`   | `object` | Any of `start` and `end` (both are needed to move the view), `selected`, `hidden`, and on the clock scale `timeZone`. |
 
-Every field is optional, so a partial state changes only what it contains. Unknown ids are ignored.
+Every field is optional, so a partial state changes only what it contains. Unknown ids are ignored. The time zone is applied first, so string `start` and `end` values are read in it.
 
 ```js
 localStorage.setItem('story', JSON.stringify(timeline.getState()));
@@ -377,6 +421,16 @@ Called with the selected [event objects](#event-object), in chronological order,
 
 > [!IMPORTANT]
 > When `syncUrl` restores a selection from the URL, `onSelectionChange` is called *during* construction, before `new Chroniko(...)` returns. At that point the variable you're assigning the timeline to is still undefined.
+
+### `onTimeZoneChange(timeZone)`
+
+Called with the new zone's name, `'local'` or `'UTC'`, whenever the [time zone](#time-zones) changes. That includes:
+
+- clicking the time zone button in the toolbar;
+- calling `setTimeZone` or `setState`;
+- the URL hash changing while `syncUrl` is on.
+
+It isn't called for the `timeZone` option itself. Like `onSelectionChange`, it can be called during construction when `syncUrl` restores a zone from the URL.
 
 ## Date helpers
 
@@ -477,6 +531,7 @@ With `syncUrl: true`, the state is kept in the URL hash like this:
 | `ck-view` | `start,end` in fractional years, or epoch ms on the clock scale. |
 | `ck-sel`  | Selected ids, separated by commas. |
 | `ck-hide` | Hidden categories, separated by commas. |
+| `ck-tz`   | Clock scale only: the time zone, `local` or `UTC`. It's always written, so a link opens in the sender's zone even if the page's default differs. An unknown zone is ignored. |
 
 - The hash is updated with `history.replaceState` shortly after each change, so it doesn't add entries to the browser history.
 - Loading the page doesn't rewrite the URL.
@@ -507,7 +562,8 @@ Every error is an `Error` whose message starts with `Chroniko:`. Any method that
 
 | Thrown by | When |
 | --------- | ---- |
-| Constructor | The container isn't found; `timeScale` isn't `'historical'` or `'clock'`; `storyPosition` isn't `'below'` or `'right'`; `split` isn't between 0 and 1; `language` is unknown. |
+| Constructor | The container isn't found; `timeScale` isn't `'historical'` or `'clock'`; `timeZone` or `timeZones` is given with the historical scale; `timeZone` isn't `'local'` or `'UTC'`; `timeZones` isn't an array of two or more of those, or lists one twice; `storyPosition` isn't `'below'` or `'right'`; `split` isn't between 0 and 1; `language` is unknown. |
+| `setTimeZone`, `setState` | On the historical scale; the zone isn't `'local'` or `'UTC'`. |
 | Constructor, `setEvents`, `addEvents` | An event isn't an object (e.g. `null`); an event has no `start` or an invalid date; two events share an id. |
 | `updateEvent` | Unknown id; the patch isn't an object; the patch changes the id; the updated event is invalid. |
 | `zoomTo`, `setState` | A date is missing or invalid; `start` isn't before `end`. |

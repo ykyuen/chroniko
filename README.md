@@ -23,7 +23,7 @@ npm start   # http://localhost:3000/
 
 Add `?story=right` to the example's URL to see the [story beside the timeline](#story-beside-the-timeline), or `?lang=ja` (any [language code](#languages)) to see the UI in another language. Both can be combined, e.g. `?story=right&lang=zh-Hant`.
 
-A second page, `http://localhost:3000/examples/clock.html`, shows a day of deploys, jobs and incidents on the [clock time scale](#clock-time-scale).
+A second page, `http://localhost:3000/examples/clock.html`, shows a day of deploys, jobs and incidents on the [clock time scale](#clock-time-scale), with a toolbar button that switches between local time and UTC.
 
 ## Usage
 
@@ -36,13 +36,13 @@ The minified files can be loaded from jsDelivr without installing anything.
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chroniko</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chroniko@0.5.0/dist/chroniko.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chroniko@0.6.0/dist/chroniko.min.css">
 </head>
 <body>
   <div id="timeline"></div>
 
   <script type="module">
-    import { Chroniko } from 'https://cdn.jsdelivr.net/npm/chroniko@0.5.0/dist/chroniko.min.js';
+    import { Chroniko } from 'https://cdn.jsdelivr.net/npm/chroniko@0.6.0/dist/chroniko.min.js';
 
     const timeline = new Chroniko('#timeline', {
       events: [
@@ -89,6 +89,9 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 | ------------------- | -------------------- | -------- | ------- | ----- |
 | `events`            | `object[]`           | no       | `[]`    | Array of events. See [Event fields](#event-fields). |
 | `timeScale`         | `'historical' \| 'clock'` | no  | `'historical'` | `'historical'` for years, months and days, BCE included. `'clock'` for timelines measured in days, hours, minutes and seconds. See [Historical time scale](#historical-time-scale) and [Clock time scale](#clock-time-scale). |
+| `timeZone`          | `'local' \| 'UTC'`   | no       | `'local'` | Clock scale only: the zone times are shown in, and offset-free strings read in. See [Time zones](#time-zones). |
+| `timeZones`         | `string[]`           | no       | N/A     | Clock scale only: the zones a toolbar button switches between, e.g. `['local', 'UTC']`. No button when omitted. See [Time zones](#time-zones). |
+| `onTimeZoneChange`  | `function(timeZone)` | no       | N/A     | Called with the new zone's name when the time zone changes. |
 | `start`             | `number \| string`   | no       | Fit all events | Start of the initial visible range. Same formats as event dates, or a fractional year (epoch ms on the clock scale). Only used if `end` is also set. |
 | `end`               | `number \| string`   | no       | Fit all events | End of the initial visible range. Only used if `start` is also set. |
 | `colors`            | `object`             | no       | `{}`    | Category → color, e.g. `{ war: '#c0392b' }`. Categories without a color get one from the built-in palette. |
@@ -107,7 +110,7 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 
 ### Methods
 
-`setEvents(events)`, `addEvents(events)`, `updateEvent(id, patch)`, `removeEvents(ids)`, `zoomTo(start, end)`, `zoomBy(factor)`, `panBy(px)`, `fit()`, `select(id)`, `deselect(id)`, `toggle(id)`, `clearSelection()`, `getSelection()`, `reveal(id)`, `getState()`, `setState(state)`, `destroy()`.
+`setEvents(events)`, `addEvents(events)`, `updateEvent(id, patch)`, `removeEvents(ids)`, `zoomTo(start, end)`, `zoomBy(factor)`, `panBy(px)`, `fit()`, `select(id)`, `deselect(id)`, `toggle(id)`, `clearSelection()`, `getSelection()`, `reveal(id)`, `setTimeZone(timeZone)`, `getTimeZone()`, `getState()`, `setState(state)`, `destroy()`.
 
 See the [API reference](docs/API.md) for every method's parameters, return value and errors.
 
@@ -172,18 +175,39 @@ new Chroniko('#timeline', {
 ```
 
 - **Dates** are epoch ms, `Date` objects or ISO strings: `"2026-11-04"`, `"2026-11-04T09:02"`, `"2026-11-04T09:02:30.250Z"`, `"2026-11-04 09:02+08:00"`.
-- **Strings with `Z` or an offset are exact.** Strings without one, including date-only strings, are read in the viewer's local time. This differs from JavaScript, which reads `"2026-11-04"` as UTC midnight. For data from servers, prefer epoch ms or strings with an offset, so every viewer sees the same instant.
-- **Times are shown in local time**, on a 24-hour clock. The axis names the time zone, e.g. `GMT+8`, so screenshots aren't ambiguous.
+- **Strings with `Z` or an offset are exact.** Strings without one, including date-only strings, are read in the [time zone](#time-zones), which is the viewer's local time unless you choose UTC. This differs from JavaScript, which reads `"2026-11-04"` as UTC midnight. For data from servers, prefer epoch ms or strings with an offset, so every viewer sees the same instant.
+- **Times are shown in the time zone**, on a 24-hour clock. The axis names the zone, e.g. `GMT+8` or `UTC`, so screenshots aren't ambiguous.
 - **Precision** comes from the input: a date, minutes, seconds or ms (for numbers and `Date`s). The story shows times at that precision, and "lasted …" uses the coarser of the two, e.g. "11 minutes, 35 seconds".
 - **Range ends:** a timed `end` is the instant itself. A date-only `end` covers that whole day, like an all-day calendar event.
 - **Durations** count days, months and years on the calendar, and hours and less as the time that actually passed. So 01:00 to 04:00 on the night the clocks go forward lasted 2 hours.
-- **The axis** steps from seconds to years. Day and longer steps fall on local midnight, so a day with a daylight saving change is 23 or 25 hours wide.
+- **The axis** steps from seconds to years. Day and longer steps fall on midnight in the time zone, so in local time a day with a daylight saving change is 23 or 25 hours wide.
 - **Positions** in `getState()`, `minSpan`, `maxSpan` and the `ck-view` URL parameter are epoch ms. `zoomTo` and `setState` take any clock date.
-- `parseTime(input)` is exported alongside `parseDate`. `formatDate` and `formatDuration` accept its results too.
+- `parseTime(input)` is exported alongside `parseDate`. `formatDate` and `formatDuration` accept its results too. These helpers always use local time.
+
+#### Time zones
+
+Times are shown in the viewer's local time by default. To show them in UTC, for example to compare with server logs, set `timeZone`. To let the viewer switch, list the zones in `timeZones`:
+
+```js
+const timeline = new Chroniko('#timeline', {
+  timeScale: 'clock',
+  events,
+  timeZone: 'UTC',               // 'local' (default) or 'UTC'
+  timeZones: ['local', 'UTC'],   // adds a toolbar button
+  onTimeZoneChange: (tz) => console.log(tz),
+});
+timeline.setTimeZone('local');
+timeline.getTimeZone();          // 'local'
+```
+
+- **The toolbar button** shows the zone in use, "Local time" or "UTC", and switches to the next zone in `timeZones`. Without `timeZones` there is no button, but `setTimeZone` still works.
+- **Switching zones moves no event** and keeps the view. The axis, the story and the tooltips are labelled again in the new zone, and `onTimeZoneChange` is called.
+- **Offset-free strings are read in the zone in use when they're added**, and keep that instant afterwards. So `"2026-11-04"` added in local time stays at local midnight, and after switching to UTC it starts at, say, 16:00 the day before for a viewer in Hong Kong. Use epoch ms or strings with an offset if events must not depend on the zone.
+- **Only `'local'` and `'UTC'` are supported** in this version. Other values, such as `'Asia/Tokyo'`, throw. `timeZone` and `timeZones` with the historical scale throw too, since historical dates have no time of day.
 
 ### Sharing
 
-`getState()` returns `{ start, end, selected, hidden }`: the visible range (in fractional years on the [historical](#historical-time-scale) scale, or epoch ms on the [clock](#clock-time-scale) scale), the selected event ids in chronological order, and the hidden categories. `setState(state)` restores it. Every field is optional, so `setState({ selected: ['ww2'] })` changes only the selection; unknown ids are ignored. Use these to save a story yourself, for example in `localStorage` or your own URL format.
+`getState()` returns `{ start, end, selected, hidden }`: the visible range (in fractional years on the [historical](#historical-time-scale) scale, or epoch ms on the [clock](#clock-time-scale) scale), the selected event ids in chronological order, and the hidden categories. On the clock scale it also has `timeZone`. `setState(state)` restores it. Every field is optional, so `setState({ selected: ['ww2'] })` changes only the selection; unknown ids are ignored. Use these to save a story yourself, for example in `localStorage` or your own URL format.
 
 With `syncUrl: true`, the timeline keeps this state in the URL hash, so the address bar is always a shareable link:
 
@@ -192,6 +216,7 @@ With `syncUrl: true`, the timeline keeps this state in the URL hash, so the addr
 ```
 
 - Opening the link restores the view, selection and hidden categories. Editing the hash on an open page applies it too.
+- On the clock scale the hash also has the time zone, e.g. `ck-tz=UTC`, so a link opens in the sender's zone.
 - The URL is updated with `history.replaceState` shortly after each change, so it doesn't fill the back-button history. Loading the page doesn't change the URL.
 - Other hash parameters are kept, but the hash no longer works as a plain `#section` anchor once the timeline writes to it. Use `syncUrl` on one timeline per page.
 - Generated ids depend on position (see [Event ids](#event-ids)), so give events explicit ids if shared links must survive changes to the event list.

@@ -1,6 +1,6 @@
 {
   "name": "chroniko",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Render events on a single zoomable time axis, from historical dates across millennia to deploys and incidents timed to the second. Plain HTML, CSS and JavaScript, no dependencies.",
   "license": "Apache-2.0",
   "type": "module",

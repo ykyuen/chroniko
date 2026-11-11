@@ -2,6 +2,17 @@
 
 All notable changes to Chroniko are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-11
+
+### Added
+
+- Time zones on the clock scale: `timeZone: 'local' | 'UTC'` shows times in the viewer's local time (the default) or in UTC. Offset-free strings are read in the zone in use when they're added, and keep that instant when the zone changes. The axis names the zone, e.g. `GMT+8` or `UTC`. Other zone names throw; IANA zones such as `'Asia/Tokyo'` are planned. `timeZone` with `timeScale: 'historical'` throws.
+- `timeZones` option: lists two or more zones, e.g. `['local', 'UTC']`, and adds a toolbar button that shows the zone in use and switches to the next one. Switching moves no event and keeps the view; the axis, story and tooltips are labelled again.
+- `setTimeZone(timeZone)`, `getTimeZone()` and the `onTimeZoneChange(timeZone)` callback.
+- `getState()` and `setState()` include `timeZone` on the clock scale. With `syncUrl`, the hash stores it as `ck-tz`, so a shared link opens in the sender's zone.
+- New locale strings in all 13 languages, which `uiText` can override: `localTime`, and `switchTimeZone(current, next)` for the button's tooltip and accessible label.
+- The clock example page has the time zone button.
+
 ## [0.5.0] - 2026-11-04
 
 ### Added
@@ -88,6 +99,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - Initial release.
 
+[0.6.0]: https://github.com/ykyuen/chroniko/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/ykyuen/chroniko/compare/0.4.1...0.5.0
 [0.4.1]: https://github.com/ykyuen/chroniko/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/ykyuen/chroniko/compare/0.3.1...0.4.0
