@@ -12,6 +12,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 ### Fixed
 
 - `setEvents`, `addEvents` and `updateEvent` throw when an event ends before it starts, e.g. `event "Black Death" ends (1340) before it starts (1347)`, and leave the timeline unchanged. Before, such an event was accepted and drawn backwards, and `updateEvent` could move a start past an end the patch didn't change. An end is compared by where its range stops, so a date-only end on the start's day, or a year end in the start's year, is fine.
+- On the clock scale, the story counts a date-only `end` to the end of its day, as the bar does: `"2026-11-01"` to `"2026-11-04"` lasted 4 days, not 3. Its "End of …" marker sits where the range stops, so an event ending on the day it starts, e.g. `"2026-11-04T09:00"` to `"2026-11-04"`, now gets a marker ("lasted 15 hours"). Before, such an event had no end marker, and after a time zone switch the duration disagreed with the end time shown, e.g. "31 Oct 2026, 16:00 – 4 Nov 2026, 16:00" lasted 3 days. `formatDuration` and the historical scale are unchanged.
 
 ## [0.6.1] - 2026-11-11
 

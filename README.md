@@ -179,7 +179,7 @@ new Chroniko('#timeline', {
 - **Times are shown in the time zone**, on a 24-hour clock. The axis names the zone, e.g. `GMT+8` or `UTC`, so screenshots aren't ambiguous.
 - **Precision** comes from the input: a date, minutes, seconds or ms (for numbers and `Date`s). The story shows times at that precision, and "lasted …" uses the coarser of the two, e.g. "11 minutes, 35 seconds".
 - **Range ends:** a timed `end` is the instant itself. A date-only `end` covers that whole day, like an all-day calendar event.
-- **Durations** count days, months and years on the calendar, and hours and less as the time that actually passed. So 01:00 to 04:00 on the night the clocks go forward lasted 2 hours.
+- **Durations** count days, months and years on the calendar, and hours and less as the time that actually passed. So 01:00 to 04:00 on the night the clocks go forward lasted 2 hours. In the story, a date-only `end` is counted to the end of its day, like the bar: 1 Nov to 4 Nov lasted 4 days, and 09:00 to the same date lasted 15 hours. `formatDuration` measures to the end date itself.
 - **The axis** steps from seconds to years. Day and longer steps fall on midnight in the time zone, so in local time a day with a daylight saving change is 23 or 25 hours wide.
 - **Positions** in `getState()`, `minSpan`, `maxSpan` and the `ck-view` URL parameter are epoch ms. `zoomTo` and `setState` take any clock date.
 - `parseTime(input)` is exported alongside `parseDate`. `formatDate` and `formatDuration` accept its results too. These helpers always use local time.

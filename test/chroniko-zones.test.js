@@ -166,6 +166,25 @@ describe('setTimeZone', () => {
     assert.equal(tooltip(timeline, 'On-call'), 'On-call · 4 Nov 2026 – 4 Nov 2026');
   });
 
+  test('a date-only end is measured to the midnight after it, in any zone', () => {
+    const timeline = clock({
+      events: [
+        { id: 'days', title: 'Days', start: '2026-11-01', end: '2026-11-04' },
+        { id: 'day', title: 'Day', start: '2026-11-04', end: '2026-11-04' },
+        { id: 'rest', title: 'Rest', start: '2026-11-04T09:00', end: '2026-11-04' },
+      ],
+    });
+    for (const id of ['days', 'day', 'rest']) timeline.select(id);
+    const lasted = () => {
+      dom.frame();
+      return [...timeline.storyEl.innerHTML.matchAll(/ck-end-duration">([^<]*)</g)].map((m) => m[1]);
+    };
+    const expected = ['lasted 4 days', 'lasted 1 day', 'lasted 15 hours'];
+    assert.deepEqual(lasted(), expected);
+    timeline.setTimeZone('UTC');
+    assert.deepEqual(lasted(), expected);
+  });
+
   test('events added afterwards are read in the new zone', () => {
     const timeline = clock();
     timeline.setTimeZone('UTC');

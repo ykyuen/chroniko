@@ -113,6 +113,19 @@ export function timeEndText(d, to, m, zone = local) {
   return timeText(shifted ? { ...d, value: to, precision: 'minute' } : d, m, zone);
 }
 
+/**
+ * How long an event lasted, where `to` is the instant its range stops (see
+ * rangeEnd). A date-only end covers its whole day, so it is measured to the
+ * midnight after it, like an all-day event: 1 Nov to 4 Nov is 4 days, 4 Nov
+ * to 4 Nov is 1 day, and 09:00 to the end of that day is 15 hours. This
+ * matches the bar and timeEndText in every zone. formatDuration(), which
+ * takes two dates and no range, measures to the end date itself.
+ */
+export function timeRangeDurationText(start, end, to, m, zone = local) {
+  const stop = end.precision === 'day' ? { ...end, value: to, precision: 'minute' } : end;
+  return timeDurationText(start, stop, m, zone);
+}
+
 function decimalMark(m) {
   return m.number.formatToParts(1.5).find((p) => p.type === 'decimal')?.value ?? '.';
 }
@@ -293,6 +306,7 @@ export function clockScale(zone = local) {
     formatDate: (d, m) => timeText(d, m, zone),
     formatEnd: (d, to, m) => timeEndText(d, to, m, zone),
     formatDuration: (start, end, m) => timeDurationText(start, end, m, zone),
+    formatLasted: (start, end, to, m) => timeRangeDurationText(start, end, to, m, zone),
 
     minSpan: 1000, // a second
     maxSpan: (dataSpan) => Math.max(dataSpan * 3, DAY),

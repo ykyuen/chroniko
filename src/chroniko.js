@@ -1287,9 +1287,12 @@ export class Chroniko {
     }
     const entries = items.map((item) => ({ item, at: item.from, isEnd: false }));
     for (const item of items) {
-      // An end with coarser precision than the start (e.g. "1453" after
-      // "1453-04-06") can sort before it; such an end gets no marker.
-      if (item.end && item.end.value > item.from) entries.push({ item, at: item.end.value, isEnd: true });
+      // On the clock scale the marker sits where the range stops, so a
+      // date-only end on the start's day comes after it. A historical end sits
+      // at its date; one with coarser precision than the start (e.g. "1453"
+      // after "1453-04-06") can sort before it, and gets no marker.
+      const at = item.end && (this.scale.zone ? item.to : item.end.value);
+      if (item.end && at > item.from) entries.push({ item, at, isEnd: true });
     }
     // Stable sort keeps start-date order among ties; an end sorts before a start
     // at the same moment, so "X ends" reads before "Y begins".
@@ -1308,7 +1311,7 @@ export class Chroniko {
     const m = this.m;
     const title = esc(item.event.title ?? '');
     const date = esc(this._endText(item));
-    const duration = esc(this.scale.formatDuration(item.start, item.end, m));
+    const duration = esc(this._lastedText(item));
     return `
       <li class="ck-end" style="--ck-color:${esc(item.color)}">
         <button type="button" class="ck-end-jump${this._hoverClass(item)}" data-id="${esc(item.id)}"
@@ -1363,6 +1366,16 @@ export class Chroniko {
   _endText(item) {
     const { formatEnd, formatDate } = this.scale;
     return formatEnd ? formatEnd(item.end, item.to, this.m) : formatDate(item.end, this.m);
+  }
+
+  // How long an event lasted. The clock scale measures to where the range
+  // stops (see timeRangeDurationText); historical durations run to the end
+  // date, so 1337 to 1453 is 116 years.
+  _lastedText(item) {
+    const { formatLasted, formatDuration } = this.scale;
+    return formatLasted
+      ? formatLasted(item.start, item.end, item.to, this.m)
+      : formatDuration(item.start, item.end, this.m);
   }
 
   _hoverClass(item) {
