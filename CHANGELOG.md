@@ -8,7 +8,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 ### Changed
 
-- Errors for a bad visible range name the call and the date that was wrong, e.g. `setState start is invalid: cannot parse time "nope"`, `zoomTo end is missing` or `the start option (1500) must be before the end option (1300)`. Before, `setState` and the `start` and `end` options blamed `zoomTo`, and an unparseable date didn't say where it came from. Likewise, `setState` with a `timeZone` on the historical scale throws `setState timeZone needs timeScale: 'clock'` instead of blaming `setTimeZone`.
+- Errors for a bad visible range name the call and the date that was wrong, e.g. `setState start is invalid: cannot parse time "nope"`, `zoomTo end is missing` or `the start option (1500) must be before the end option (1300)`. Before, `setState` and the `start` and `end` options blamed `zoomTo`, and an unparseable date didn't say where it came from. Likewise, `setState` with a `timeZone` on the historical scale throws `setState timeZone needs timeScale: 'clock'` instead of blaming `setTimeZone`, and a backwards range given as `Date` objects shows them as ISO strings, e.g. `(2026-11-05T00:00:00.000Z)`, instead of their long `toString()` form.
 
 ### Fixed
 

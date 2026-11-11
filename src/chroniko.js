@@ -341,7 +341,10 @@ export class Chroniko {
     const from = read('start', start);
     const to = read('end', end);
     if (from >= to) {
-      throw new Error(`Chroniko: ${name('start')} (${start}) must be before ${name('end')} (${end})`);
+      // A Date is shown as an ISO string, not its long toString() form. It
+      // parsed, so it is a valid date.
+      const show = (input) => (input instanceof Date ? input.toISOString() : input);
+      throw new Error(`Chroniko: ${name('start')} (${show(start)}) must be before ${name('end')} (${show(end)})`);
     }
     return [from, to];
   }

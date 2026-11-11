@@ -317,6 +317,10 @@ describe('errors for a bad range name the caller', () => {
       () => timeline.zoomTo('2026-11-05', '2026-11-04'),
       /^Error: Chroniko: zoomTo start \(2026-11-05\) must be before zoomTo end \(2026-11-04\)$/,
     );
+    assert.throws(
+      () => timeline.setState({ start: new Date('2026-11-05T00:00Z'), end: new Date('2026-11-04T00:00Z') }),
+      /^Error: Chroniko: setState start \(2026-11-05T00:00:00\.000Z\) must be before setState end \(2026-11-04T00:00:00\.000Z\)$/,
+    );
   });
 
   test('the start and end options', () => {
