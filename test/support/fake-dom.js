@@ -92,6 +92,16 @@ class FakeElement {
 }
 
 /**
+ * Click something inside an element that listens for clicks on its children:
+ * the click's target is a child that matches the selector and has this
+ * dataset, e.g. clickOn(timeline.legendEl, '.ck-legend-item', { category: 'war' }).
+ */
+export function clickOn(element, selector, dataset = {}) {
+  const child = { dataset, closest: (s) => (s === selector ? child : null) };
+  element.fire('click', { target: child });
+}
+
+/**
  * Put the fake browser on globalThis. Call it before each test, since it
  * starts again from an empty page and URL. Returns:
  * - container: the element to pass to new Chroniko()

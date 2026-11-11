@@ -9,7 +9,7 @@
 import { describe, test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Chroniko } from '../src/chroniko.js';
-import { installDom } from './support/fake-dom.js';
+import { installDom, clickOn } from './support/fake-dom.js';
 
 const utc = (s) => Date.parse(s);
 
@@ -64,9 +64,7 @@ function tooltip(timeline, title) {
 }
 
 const clickToggle = (timeline) =>
-  timeline.root.querySelector('.ck-controls').fire('click', {
-    target: { closest: () => ({ dataset: { action: 'time-zone' } }) },
-  });
+  clickOn(timeline.root.querySelector('.ck-controls'), 'button', { action: 'time-zone' });
 
 describe('the timeZone option', () => {
   test('is local time by default', () => {
