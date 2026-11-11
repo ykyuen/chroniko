@@ -6,6 +6,8 @@ export default {
   fit: '전체 보기',
   dimUnselected: '선택 안 된 항목 흐리게',
   largerText: '글자 크게',
+  localTime: '현지 시간',
+  switchTimeZone: (current, next) => `${current} 기준 시간대. ${next} 기준으로 보기`,
   categories: '분류',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) => `타임라인. 드래그하거나 화살표 키로 이동하고, + 와 −, ${ctrl}+스크롤 또는 핀치로 확대/축소합니다.`,

@@ -8,6 +8,8 @@ export default {
   fit: 'Dopasuj',
   dimUnselected: 'Przyciemnij niezaznaczone',
   largerText: 'Większy tekst',
+  localTime: 'Czas lokalny',
+  switchTimeZone: (current, next) => `${current} (strefa czasowa). Przełącz na: ${next}`,
   categories: 'Kategorie',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) =>

@@ -13,6 +13,12 @@ export default {
   fit: 'Fit',
   dimUnselected: 'Dim unselected events',
   largerText: 'Larger text',
+  // The timeZones toggle shows the zone in use: localTime, or "UTC" as is.
+  // switchTimeZone() is its tooltip and accessible label, and gets plain
+  // text (not escaped). It must contain the shown zone, best at the start, so
+  // speech input can find the button by what it shows.
+  localTime: 'Local time',
+  switchTimeZone: (current, next) => `${current} (time zone). Switch to ${next}`,
   categories: 'Categories',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) => `Timeline. Drag or use arrow keys to pan; press + and −, ${ctrl}+scroll or pinch to zoom.`,

@@ -6,6 +6,8 @@ export default {
   fit: 'Adatta',
   dimUnselected: 'Attenua i non selezionati',
   largerText: 'Testo più grande',
+  localTime: 'Ora locale',
+  switchTimeZone: (current, next) => `${current} (fuso orario). Passa a: ${next}`,
   categories: 'Categorie',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) =>

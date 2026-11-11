@@ -6,6 +6,8 @@ export default {
   fit: '全览',
   dimUnselected: '淡化未选事件',
   largerText: '放大文字',
+  localTime: '本地时间',
+  switchTimeZone: (current, next) => `时区：${current}。切换至${next}`,
   categories: '类别',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) => `时间轴。拖动或使用方向键平移；按 + 和 −、${ctrl} + 滚轮或双指缩放。`,

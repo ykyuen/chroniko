@@ -6,6 +6,8 @@ export default {
   fit: '全体表示',
   dimUnselected: '選択外を暗く',
   largerText: '文字を大きく',
+  localTime: '現地時間',
+  switchTimeZone: (current, next) => `${current}（タイムゾーン）。${next}に切り替え`,
   categories: 'カテゴリ',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) =>

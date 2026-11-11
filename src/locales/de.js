@@ -6,6 +6,8 @@ export default {
   fit: 'Einpassen',
   dimUnselected: 'Nicht ausgewählte abblenden',
   largerText: 'Größere Schrift',
+  localTime: 'Ortszeit',
+  switchTimeZone: (current, next) => `${current} (Zeitzone). Wechseln zu: ${next}`,
   categories: 'Kategorien',
   ctrlKey: 'Strg',
   viewport: (ctrl) =>

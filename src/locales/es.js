@@ -6,6 +6,8 @@ export default {
   fit: 'Ajustar',
   dimUnselected: 'Atenuar los no seleccionados',
   largerText: 'Texto más grande',
+  localTime: 'Hora local',
+  switchTimeZone: (current, next) => `${current} (zona horaria). Cambiar a: ${next}`,
   categories: 'Categorías',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) =>

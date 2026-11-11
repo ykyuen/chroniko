@@ -18,7 +18,7 @@
   <body>
     <main>
       <h1>Chroniko: a day of operations</h1>
-      <p>The clock time scale, with deploys, jobs, incidents and alerts from one day. Times without an offset are read in your own time zone, shown at the right end of the axis. Zoom in to see minutes and seconds.</p>
+      <p>The clock time scale, with deploys, jobs, incidents and alerts from one day. Times without an offset are read in your own time zone, shown at the right end of the axis. The first toolbar button switches between local time and UTC. Zoom in to see minutes and seconds.</p>
       <div class="controls">
         <span>
           <label for="lang">Language</label>
@@ -87,6 +87,7 @@
 
       window.timeline = new Chroniko('#timeline', {
         timeScale: 'clock',
+        timeZones: ['local', 'UTC'],
         events,
         language,
         colors: { deploy: '#4e79a7', job: '#59a14f', incident: '#e15759', alert: '#f28e2b' },

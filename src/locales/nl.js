@@ -7,6 +7,8 @@ export default {
   fit: 'Passend maken',
   dimUnselected: 'Niet-geselecteerde dimmen',
   largerText: 'Grotere tekst',
+  localTime: 'Lokale tijd',
+  switchTimeZone: (current, next) => `${current} (tijdzone). Wisselen naar: ${next}`,
   categories: 'Categorieën',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) =>

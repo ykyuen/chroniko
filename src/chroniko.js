@@ -130,6 +130,8 @@ export class Chroniko {
    *                                    read by parseTime, shown in the time zone.
    * @param {string} [options.timeZone] Clock scale only: 'local' (default) or 'UTC'. Times are shown, and
    *                                    offset-free strings read, in this zone.
+   * @param {string[]} [options.timeZones] Clock scale only: the zones a toolbar control switches between,
+   *                                    e.g. ['local', 'UTC'] for a toggle button. No control when omitted.
    * @param {Function} [options.onTimeZoneChange] Called with the new time zone's name when it changes.
    * @param {*}      [options.start]    Initial visible range start (any date the time scale reads).
    * @param {*}      [options.end]      Initial visible range end. Fits all events when omitted.
@@ -163,12 +165,23 @@ export class Chroniko {
       tagLabels: {},
       ...options,
     };
-    const { timeScale, timeZone, storyPosition, split } = this.options;
+    const { timeScale, timeZone, timeZones, storyPosition, split } = this.options;
     if (!SCALES.includes(timeScale)) {
       throw new Error(`Chroniko: timeScale must be 'historical' or 'clock', got ${JSON.stringify(timeScale)}`);
     }
-    if (timeScale === 'historical' && timeZone != null) {
-      throw new Error("Chroniko: timeZone needs timeScale: 'clock'; historical dates have no time of day");
+    for (const [key, value] of [['timeZone', timeZone], ['timeZones', timeZones]]) {
+      if (timeScale === 'historical' && value != null) {
+        throw new Error(`Chroniko: ${key} needs timeScale: 'clock'; historical dates have no time of day`);
+      }
+    }
+    if (timeZones != null) {
+      if (!Array.isArray(timeZones) || timeZones.length < 2) {
+        throw new Error(`Chroniko: timeZones must be an array of at least two time zones, got ${JSON.stringify(timeZones)}`);
+      }
+      const names = timeZones.map((tz) => zoneNamed(tz).name);
+      const repeated = names.find((name, i) => names.indexOf(name) !== i);
+      if (repeated) throw new Error(`Chroniko: timeZones lists ${JSON.stringify(repeated)} more than once`);
+      this._zoneNames = names;
     }
     if (storyPosition !== 'below' && storyPosition !== 'right') {
       throw new Error(`Chroniko: storyPosition must be 'below' or 'right', got ${JSON.stringify(storyPosition)}`);
@@ -384,6 +397,7 @@ export class Chroniko {
     const zone = zoneNamed(timeZone);
     if (zone === this.scale.zone) return;
     this.scale = clockScale(zone);
+    this._syncZoneToggle();
     this._renderStory();
     this._scheduleRender();
     this._stateChanged();
@@ -458,6 +472,7 @@ export class Chroniko {
           <div class="ck-toolbar">
             <div class="ck-legend" role="group" aria-label="${esc(m.categories)}"></div>
             <div class="ck-controls">
+              ${this._zoneNames ? '<button type="button" data-action="time-zone" class="ck-zone-toggle"></button>' : ''}
               <button type="button" data-action="zoom-in" aria-label="${esc(m.zoomIn)}">+</button>
               <button type="button" data-action="zoom-out" aria-label="${esc(m.zoomOut)}">−</button>
               <button type="button" data-action="fit">${esc(m.fit)}</button>
@@ -490,6 +505,8 @@ export class Chroniko {
     this.storyEl = this.root.querySelector('.ck-story');
     this.hintEl = this.root.querySelector('.ck-hint');
     this.hintEl.innerHTML = m.hint(esc(ctrl));
+    this.zoneToggleEl = this.root.querySelector('.ck-zone-toggle');
+    this._syncZoneToggle();
   }
 
   _showHint() {
@@ -508,6 +525,7 @@ export class Chroniko {
       else if (action === 'fit') this.fit();
       else if (action === 'dim') this._toggleDim(e.target.closest('button'));
       else if (action === 'text-size') this._toggleTextSize(e.target.closest('button'));
+      else if (action === 'time-zone') this.setTimeZone(this._nextZone());
     });
 
     this.tagbarEl.addEventListener('click', (e) => {
@@ -746,6 +764,28 @@ export class Chroniko {
   // Dimming applies only while something is selected; see ck-has-selection in _renderStory.
   _toggleDim(button) {
     button.setAttribute('aria-pressed', this.root.classList.toggle('ck-dim'));
+  }
+
+  // The zone after the current one in timeZones, wrapping around. A zone
+  // that isn't listed (set through setTimeZone or the URL) goes to the first.
+  _nextZone() {
+    const names = this._zoneNames;
+    return names[(names.indexOf(this.scale.zone.name) + 1) % names.length];
+  }
+
+  _zoneText(name) {
+    return name === 'local' ? this.m.localTime : name;
+  }
+
+  // The toggle shows the zone in use. Its label, which is also its tooltip,
+  // starts with that text, so speech input can still find it by what it shows.
+  // setAttribute and textContent don't parse HTML, so nothing is escaped here.
+  _syncZoneToggle() {
+    const button = this.zoneToggleEl;
+    if (!button) return;
+    const current = this._zoneText(this.scale.zone.name);
+    button.textContent = current;
+    button.setAttribute('aria-label', this.m.switchTimeZone(current, this._zoneText(this._nextZone())));
   }
 
   // Label widths are cached for lane packing, and a size change fires neither
