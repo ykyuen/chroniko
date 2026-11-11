@@ -8,6 +8,7 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - `updateEvent` no longer moves an event whose dates the patch doesn't change. Before, after a time zone switch, any patch (even one changing only the title) read the event's offset-free `start` and `end` strings again in the new zone, shifting the event by the zone's offset. Dates in the patch are still read in the zone in use.
 - A date-only `start` or `end` shown in a time zone other than the one it was read in now shows its time in tooltips and the story, e.g. "3 Nov 2026, 16:00" for `"2026-11-04"` added in Hong Kong and shown in UTC. Before, it showed only the date in the new zone ("3 Nov 2026"), a day off with nothing to explain it. A date-only `end` shows the instant the range stops, e.g. "4 Nov 2026, 16:00".
+- `setState` checks the whole state before applying any of it, so a state that throws leaves the timeline unchanged. Before, a state with a valid `timeZone` and an invalid `start` or `end` switched the zone and called `onTimeZoneChange`, and then threw.
 
 ## [0.6.0] - 2026-11-11
 

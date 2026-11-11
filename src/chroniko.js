@@ -317,10 +317,21 @@ export class Chroniko {
    * minSpan/maxSpan is clamped around the range's center.
    */
   zoomTo(start, end) {
-    const from = this.scale.parse(start)?.value;
-    const to = this.scale.parse(end)?.value;
+    this._showRange(this._range(start, end));
+  }
+
+  // The positions [from, to] of a range given as dates, read by the scale
+  // (the current one unless given). Throws on a missing, invalid or
+  // backwards range.
+  _range(start, end, scale = this.scale) {
+    const from = scale.parse(start)?.value;
+    const to = scale.parse(end)?.value;
     if (from == null || to == null) throw new Error('Chroniko: zoomTo needs both a start and an end');
     if (from >= to) throw new Error(`Chroniko: zoomTo start (${start}) must be before end (${end})`);
+    return [from, to];
+  }
+
+  _showRange([from, to]) {
     const center = (from + to) / 2;
     const span = this._clampSpan(to - from);
     this._setView(center - span / 2, center + span / 2);
@@ -398,10 +409,19 @@ export class Chroniko {
    * relabeled. Offset-free strings added later are read in the new zone.
    */
   setTimeZone(timeZone) {
+    this._setZone(this._zoneFor(timeZone));
+  }
+
+  // The zone with this name. Throws on the historical scale, and for a name
+  // that isn't a zone.
+  _zoneFor(timeZone) {
     if (!this.scale.zone) {
       throw new Error("Chroniko: setTimeZone needs timeScale: 'clock'; historical dates have no time of day");
     }
-    const zone = zoneNamed(timeZone);
+    return zoneNamed(timeZone);
+  }
+
+  _setZone(zone) {
     if (zone === this.scale.zone) return;
     this.scale = clockScale(zone);
     this._syncZoneToggle();
@@ -436,13 +456,20 @@ export class Chroniko {
    * state changes only what it names. Unknown event ids are ignored.
    */
   setState(state = {}) {
-    if (state.timeZone != null) this.setTimeZone(state.timeZone);
-    if (state.start != null && state.end != null) this.zoomTo(state.start, state.end);
-    if (state.hidden) this._setHidden(state.hidden.map(String));
-    if (state.selected) {
-      const ids = new Set(state.selected.map(String));
-      this._setSelection(this.items.filter((it) => ids.has(it.id)).map((it) => it.id));
-    }
+    // Everything is read before anything is applied, so a state that throws
+    // leaves the timeline as it was. String dates are read in the state's
+    // own time zone when it has one.
+    const zone = state.timeZone != null ? this._zoneFor(state.timeZone) : null;
+    const range =
+      state.start != null && state.end != null
+        ? this._range(state.start, state.end, zone ? clockScale(zone) : this.scale)
+        : null;
+    const hidden = state.hidden ? state.hidden.map(String) : null;
+    const ids = state.selected ? new Set(state.selected.map(String)) : null;
+    if (zone) this._setZone(zone);
+    if (range) this._showRange(range);
+    if (hidden) this._setHidden(hidden);
+    if (ids) this._setSelection(this.items.filter((it) => ids.has(it.id)).map((it) => it.id));
   }
 
   destroy() {
