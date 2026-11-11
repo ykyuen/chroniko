@@ -241,6 +241,26 @@ describe('clockScale in UTC, on a machine in America/New_York', () => {
     assert.equal(scale.formatDuration(scale.parse('2026-03-07T12:00'), scale.parse('2026-03-08T12:00'), m), '1 day');
   });
 
+  test('a date-only time read in another zone is shown with its time', () => {
+    const m = { ...LOCALES.en, number: new Intl.NumberFormat('en'), plural: new Intl.PluralRules('en') };
+    // Read in New York (GMT-4), so it starts at 04:00 UTC.
+    const day = clock.parse('2026-10-28');
+    assert.equal(clock.formatDate(day, m), '28 Oct 2026');
+    assert.equal(scale.formatDate(day, m), '28 Oct 2026, 04:00');
+    // Its end shows when the range stops: the next New York midnight.
+    assert.equal(clock.formatEnd(day, clock.rangeEnd(day), m), '28 Oct 2026');
+    assert.equal(scale.formatEnd(day, clock.rangeEnd(day), m), '29 Oct 2026, 04:00');
+    // Read in UTC, it is a plain date there and gets its time in New York.
+    const utcDay = scale.parse('2026-10-28');
+    assert.equal(scale.formatDate(utcDay, m), '28 Oct 2026');
+    assert.equal(scale.formatEnd(utcDay, scale.rangeEnd(utcDay), m), '28 Oct 2026');
+    assert.equal(clock.formatDate(utcDay, m), '27 Oct 2026, 20:00');
+    assert.equal(clock.formatEnd(utcDay, scale.rangeEnd(utcDay), m), '28 Oct 2026, 20:00');
+    // Timed ends are unchanged.
+    const timed = parseTime('2026-10-28T10:30Z');
+    assert.equal(scale.formatEnd(timed, timed.value, m), '28 Oct 2026, 10:30');
+  });
+
   test('ticks fall on UTC times', () => {
     const [start, end] = [utc('2026-10-28T00:00Z'), utc('2026-10-29T00:00Z')];
     const labels = scale.ticks(start, end, 1000 / (end - start), 90, { ...LOCALES.en }).map((t) => t.label);

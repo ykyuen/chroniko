@@ -202,7 +202,7 @@ timeline.getTimeZone();          // 'local'
 
 - **The toolbar button** shows the zone in use, "Local time" or "UTC", and switches to the next zone in `timeZones`. Without `timeZones` there is no button, but `setTimeZone` still works.
 - **Switching zones moves no event** and keeps the view. The axis, the story and the tooltips are labelled again in the new zone, and `onTimeZoneChange` is called.
-- **Offset-free strings are read in the zone in use when they're added**, and keep that instant afterwards. So `"2026-11-04"` added in local time stays at local midnight, and after switching to UTC it starts at, say, 16:00 the day before for a viewer in Hong Kong. Use epoch ms or strings with an offset if events must not depend on the zone.
+- **Offset-free strings are read in the zone in use when they're added**, and keep that instant afterwards. So `"2026-11-04"` added in local time stays at local midnight, and after switching to UTC it starts at, say, 16:00 the day before for a viewer in Hong Kong. Its tooltip and story card then show the time as well, e.g. "3 Nov 2026, 16:00", since the bare date would be a day off. Use epoch ms or strings with an offset if events must not depend on the zone.
 - **Only `'local'` and `'UTC'` are supported** in this version. Other values, such as `'Asia/Tokyo'`, throw. `timeZone` and `timeZones` with the historical scale throw too, since historical dates have no time of day.
 
 ### Sharing

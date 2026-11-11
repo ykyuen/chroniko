@@ -1250,7 +1250,7 @@ export class Chroniko {
   _storyEnd(item) {
     const m = this.m;
     const title = esc(item.event.title ?? '');
-    const date = esc(this.scale.formatDate(item.end, m));
+    const date = esc(this._endText(item));
     const duration = esc(this.scale.formatDuration(item.start, item.end, m));
     return `
       <li class="ck-end" style="--ck-color:${esc(item.color)}">
@@ -1298,7 +1298,14 @@ export class Chroniko {
 
   _rangeText(item) {
     const start = this.scale.formatDate(item.start, this.m);
-    return item.end ? `${start} – ${this.scale.formatDate(item.end, this.m)}` : start;
+    return item.end ? `${start} – ${this._endText(item)}` : start;
+  }
+
+  // The clock scale words a range's end itself (see timeEndText); historical
+  // ends are plain dates.
+  _endText(item) {
+    const { formatEnd, formatDate } = this.scale;
+    return formatEnd ? formatEnd(item.end, item.to, this.m) : formatDate(item.end, this.m);
   }
 
   _hoverClass(item) {

@@ -79,16 +79,38 @@ function offsetMs(offset) {
  * decimal mark before milliseconds.
  * Everything comes from zone.fields(), not Intl.DateTimeFormat, whose
  * formatters fix the time zone when they are created.
+ * A date-only time that isn't the start of a day in the zone (it was read in
+ * another zone, before a switch) gets its time too, e.g. "3 Nov 2026, 16:00"
+ * for 4 Nov in Hong Kong shown in UTC: the bare date would be a day off.
  */
 export function timeText(d, m, zone = local) {
   const { year, month, day, hour, minute, second, ms } = zone.fields(d.value);
   const date = m.day(day, m.months[month - 1], m.year(year));
-  if (d.precision === 'day') return date;
+  const dateOnly = d.precision === 'day';
+  if (dateOnly && startsDay(d.value, zone)) return date;
   const pad = (n) => String(n).padStart(2, '0');
   let time = `${pad(hour)}:${pad(minute)}`;
-  if (d.precision !== 'minute') time += `:${pad(second)}`;
+  if (dateOnly ? second !== 0 : d.precision !== 'minute') time += `:${pad(second)}`;
   if (d.precision === 'ms') time += `${decimalMark(m)}${String(ms).padStart(3, '0')}`;
   return m.dateTime(date, time);
+}
+
+// Whether an instant is the start of its day in the zone: midnight, or the
+// first time that exists where a DST change skips midnight.
+function startsDay(value, zone) {
+  const { year, month, day } = zone.fields(value);
+  return zone.instant({ year, month, day }) === value;
+}
+
+/**
+ * The text for a range's end, where `to` is the instant the range stops. A
+ * date-only end normally shows its date, which covers that whole day. One
+ * read in another zone doesn't cover a day of this zone, so it shows the
+ * instant the range stops instead, e.g. "4 Nov 2026, 16:00".
+ */
+export function timeEndText(d, to, m, zone = local) {
+  const shifted = d.precision === 'day' && !startsDay(d.value, zone);
+  return timeText(shifted ? { ...d, value: to, precision: 'minute' } : d, m, zone);
 }
 
 function decimalMark(m) {
@@ -269,6 +291,7 @@ export function clockScale(zone = local) {
       return a === b ? a : `${a} – ${b}`;
     },
     formatDate: (d, m) => timeText(d, m, zone),
+    formatEnd: (d, to, m) => timeEndText(d, to, m, zone),
     formatDuration: (start, end, m) => timeDurationText(start, end, m, zone),
 
     minSpan: 1000, // a second
