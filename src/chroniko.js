@@ -19,9 +19,10 @@
 
 import LOCALES from './locales/index.js';
 import historical, { parseDate, dateText, durationText } from './scales/historical.js';
-import clock, { parseTime, timeText, timeDurationText } from './scales/clock.js';
+import { clockScale, parseTime, timeText, timeDurationText } from './scales/clock.js';
+import { zoneNamed } from './zone.js';
 
-const SCALES = { historical, clock };
+const SCALES = ['historical', 'clock'];
 
 export { parseDate, parseTime };
 
@@ -126,7 +127,10 @@ export class Chroniko {
    * @param {Array}  options.events     [{ id, title, start, end?, category?, tags?, description?, url?, color? }]
    * @param {string} [options.timeScale] 'historical' (default): dates are years, months and days, read by
    *                                    parseDate. 'clock': dates are instants (epoch ms, Date or ISO string)
-   *                                    read by parseTime, shown in local time.
+   *                                    read by parseTime, shown in the time zone.
+   * @param {string} [options.timeZone] Clock scale only: 'local' (default) or 'UTC'. Times are shown, and
+   *                                    offset-free strings read, in this zone.
+   * @param {Function} [options.onTimeZoneChange] Called with the new time zone's name when it changes.
    * @param {*}      [options.start]    Initial visible range start (any date the time scale reads).
    * @param {*}      [options.end]      Initial visible range end. Fits all events when omitted.
    * @param {object} [options.colors]   Category → color, e.g. { war: '#c0392b' }.
@@ -159,9 +163,12 @@ export class Chroniko {
       tagLabels: {},
       ...options,
     };
-    const { timeScale, storyPosition, split } = this.options;
-    if (!Object.hasOwn(SCALES, timeScale)) {
+    const { timeScale, timeZone, storyPosition, split } = this.options;
+    if (!SCALES.includes(timeScale)) {
       throw new Error(`Chroniko: timeScale must be 'historical' or 'clock', got ${JSON.stringify(timeScale)}`);
+    }
+    if (timeScale === 'historical' && timeZone != null) {
+      throw new Error("Chroniko: timeZone needs timeScale: 'clock'; historical dates have no time of day");
     }
     if (storyPosition !== 'below' && storyPosition !== 'right') {
       throw new Error(`Chroniko: storyPosition must be 'below' or 'right', got ${JSON.stringify(storyPosition)}`);
@@ -170,7 +177,7 @@ export class Chroniko {
       throw new Error(`Chroniko: split must be a number between 0 and 1, got ${JSON.stringify(split)}`);
     }
     this.m = messagesFor(this.options.language, this.options.uiText);
-    this.scale = SCALES[timeScale];
+    this.scale = timeScale === 'clock' ? clockScale(zoneNamed(timeZone ?? 'local')) : historical;
     this.items = [];
     this.hidden = new Set();
     this.selected = new Set();
@@ -366,8 +373,32 @@ export class Chroniko {
   }
 
   /**
+   * Show times in another zone: 'local' or 'UTC'. Clock scale only. Events
+   * and the view stay where they are; the axis, story and tooltips are
+   * relabeled. Offset-free strings added later are read in the new zone.
+   */
+  setTimeZone(timeZone) {
+    if (!this.scale.zone) {
+      throw new Error("Chroniko: setTimeZone needs timeScale: 'clock'; historical dates have no time of day");
+    }
+    const zone = zoneNamed(timeZone);
+    if (zone === this.scale.zone) return;
+    this.scale = clockScale(zone);
+    this._renderStory();
+    this._scheduleRender();
+    this._stateChanged();
+    this.options.onTimeZoneChange?.(zone.name);
+  }
+
+  /** The time zone times are shown in ('local' or 'UTC'), or null on the historical scale. */
+  getTimeZone() {
+    return this.scale.zone?.name ?? null;
+  }
+
+  /**
    * The view (in fractional years, or epoch ms on the clock scale), selected
-   * ids and hidden categories, for saving or sharing.
+   * ids and hidden categories, for saving or sharing. On the clock scale it
+   * also has the time zone.
    */
   getState() {
     return {
@@ -375,6 +406,7 @@ export class Chroniko {
       end: this.end,
       selected: this.items.filter((it) => this.selected.has(it.id)).map((it) => it.id),
       hidden: [...this.hidden],
+      ...(this.scale.zone && { timeZone: this.scale.zone.name }),
     };
   }
 
@@ -383,6 +415,7 @@ export class Chroniko {
    * state changes only what it names. Unknown event ids are ignored.
    */
   setState(state = {}) {
+    if (state.timeZone != null) this.setTimeZone(state.timeZone);
     if (state.start != null && state.end != null) this.zoomTo(state.start, state.end);
     if (state.hidden) this._setHidden(state.hidden.map(String));
     if (state.selected) {
@@ -763,6 +796,8 @@ export class Chroniko {
   //
   // The hash holds ck-view=<start>,<end>, ck-sel=<ids> and ck-hide=<categories>,
   // each list item URI-encoded, e.g. #ck-view=1300,1500&ck-sel=hyw,black-death.
+  // The clock scale adds ck-tz=<zone>, always, so a shared link opens in the
+  // sender's zone even where the page's own default differs.
   // Other hash parameters are kept as they are.
 
   _stateChanged() {
@@ -787,15 +822,25 @@ export class Chroniko {
     if (view?.length === 2 && view.every(Number.isFinite) && view[0] < view[1]) [state.start, state.end] = view;
     if (params.has('ck-sel')) state.selected = list('ck-sel');
     if (params.has('ck-hide')) state.hidden = list('ck-hide');
+    // A zone this version doesn't know (e.g. from a newer one) is ignored.
+    const tz = params.get('ck-tz');
+    if (this.scale.zone && tz) {
+      try {
+        state.timeZone = zoneNamed(decodeURIComponent(tz)).name;
+      } catch {
+        // keep the current zone
+      }
+    }
     this.setState(state);
   }
 
   _writeHash() {
-    const { start, end, selected, hidden } = this.getState();
+    const { start, end, selected, hidden, timeZone } = this.getState();
     const params = hashParams();
     // Enough decimals to keep the view to about a thousandth of its span.
     const digits = Math.min(6, Math.max(0, Math.ceil(3 - Math.log10(end - start))));
     params.set('ck-view', `${+start.toFixed(digits)},${+end.toFixed(digits)}`);
+    if (timeZone) params.set('ck-tz', encodeURIComponent(timeZone));
     for (const [key, values] of [['ck-sel', selected], ['ck-hide', hidden]]) {
       if (values.length) params.set(key, values.map(encodeURIComponent).join(','));
       else params.delete(key);
