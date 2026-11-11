@@ -1,7 +1,8 @@
 // Time zone helpers for the clock scale. This is the only module that reads
 // or sets Date fields (getHours(), setDate() and so on); the clock scale and
-// the renderer go through a zone object instead. 0.6.0 adds a UTC zone and
-// 0.8.0 IANA zones with the same three methods, so nothing else has to change.
+// the renderer go through a zone object instead. Each zone has a name and the
+// same three methods, so 0.8.0 can add IANA zones without changing anything
+// else.
 //
 // Instants are epoch ms. Wall-clock fields are
 // { year, month, day, hour, minute, second, ms }, with month 1–12.
@@ -49,3 +50,45 @@ export const local = {
     return `GMT${offset < 0 ? '-' : '+'}${Math.floor(abs / 60)}${minutes ? `:${String(minutes).padStart(2, '0')}` : ''}`;
   },
 };
+
+/** Coordinated Universal Time: no offset and no DST, wherever the viewer is. */
+export const utc = {
+  name: 'UTC',
+
+  fields(ms) {
+    const d = new Date(ms);
+    return {
+      year: d.getUTCFullYear(),
+      month: d.getUTCMonth() + 1,
+      day: d.getUTCDate(),
+      hour: d.getUTCHours(),
+      minute: d.getUTCMinutes(),
+      second: d.getUTCSeconds(),
+      ms: d.getUTCMilliseconds(),
+    };
+  },
+
+  /** As local.instant(); with no DST, every wall-clock time exists exactly once. */
+  instant({ year, month = 1, day = 1, hour = 0, minute = 0, second = 0, ms = 0 }) {
+    // Not Date.UTC(year, …), which reads years 0–99 as 1900–1999.
+    const d = new Date(0);
+    d.setUTCFullYear(year, month - 1, day);
+    d.setUTCHours(hour, minute, second, ms);
+    return d.getTime();
+  },
+
+  offsetLabel() {
+    return 'UTC';
+  },
+};
+
+const ZONES = { local, UTC: utc };
+
+/**
+ * The zone with this name: 'local' or 'UTC'. Throws for anything else, since
+ * IANA names such as 'Asia/Tokyo' aren't supported yet.
+ */
+export function zoneNamed(name) {
+  if (typeof name === 'string' && Object.hasOwn(ZONES, name)) return ZONES[name];
+  throw new Error(`Chroniko: timeZone must be 'local' or 'UTC', got ${JSON.stringify(name)}. IANA time zones such as 'Asia/Tokyo' are planned for a later version.`);
+}

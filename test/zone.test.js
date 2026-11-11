@@ -5,7 +5,7 @@
 
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { local } from '../src/zone.js';
+import { local, utc as utcZone, zoneNamed } from '../src/zone.js';
 
 const HOUR = 3_600_000;
 const utc = (s) => Date.parse(s);
@@ -96,5 +96,62 @@ describe('UTC', () => {
 
   test('offsetLabel is plain GMT', () => {
     assert.equal(local.offsetLabel(utc('2026-07-15T12:00:00Z')), 'GMT');
+  });
+});
+
+// The UTC zone must give the same answers whatever the viewer's own zone is.
+for (const zone of Object.keys(ZONES)) {
+  describe(`the UTC zone, on a machine in ${zone}`, () => {
+    before(() => {
+      process.env.TZ = zone;
+    });
+
+    test('fields and instant convert both ways', () => {
+      const wall = { year: 2026, month: 3, day: 8, hour: 7, minute: 30, second: 0, ms: 0 };
+      assert.deepEqual(utcZone.fields(utc('2026-03-08T07:30:00Z')), wall);
+      assert.equal(utcZone.instant(wall), utc('2026-03-08T07:30:00Z'));
+    });
+
+    test('instant defaults missing fields to the start of the period', () => {
+      assert.equal(utcZone.instant({ year: 2026 }), utc('2026-01-01T00:00:00Z'));
+      assert.equal(utcZone.instant({ year: 2026, month: 7 }), utc('2026-07-01T00:00:00Z'));
+    });
+
+    test('every day is 24 hours, also on local DST days', () => {
+      const length = (month, day) =>
+        (utcZone.instant({ year: 2026, month, day: day + 1 }) - utcZone.instant({ year: 2026, month, day })) / HOUR;
+      assert.deepEqual([length(3, 8), length(11, 1)], [24, 24]);
+    });
+
+    test('times skipped or repeated in New York exist once', () => {
+      assert.equal(utcZone.instant({ year: 2026, month: 3, day: 8, hour: 2, minute: 30 }), utc('2026-03-08T02:30:00Z'));
+      assert.equal(utcZone.instant({ year: 2026, month: 11, day: 1, hour: 1, minute: 30 }), utc('2026-11-01T01:30:00Z'));
+    });
+
+    test('out-of-range fields roll over', () => {
+      assert.equal(utcZone.instant({ year: 2026, month: 12, day: 32 }), utcZone.instant({ year: 2027, month: 1, day: 1 }));
+      assert.equal(utcZone.instant({ year: 2026, month: 3, day: 1, hour: -1 }), utc('2026-02-28T23:00:00Z'));
+    });
+
+    test('years 0–99 are not read as 1900–1999', () => {
+      assert.equal(utcZone.fields(utcZone.instant({ year: 50, month: 6, day: 15 })).year, 50);
+    });
+
+    test('offsetLabel is UTC all year', () => {
+      assert.deepEqual([utcZone.offsetLabel(utc('2026-01-15T12:00:00Z')), utcZone.offsetLabel(utc('2026-07-15T12:00:00Z'))], ['UTC', 'UTC']);
+    });
+  });
+}
+
+describe('zoneNamed', () => {
+  test('finds local and UTC', () => {
+    assert.equal(zoneNamed('local'), local);
+    assert.equal(zoneNamed('UTC'), utcZone);
+  });
+
+  test('throws for anything else, saying IANA zones are coming', () => {
+    for (const name of ['Asia/Tokyo', 'utc', '', null, undefined, 8]) {
+      assert.throws(() => zoneNamed(name), /timeZone must be 'local' or 'UTC'.*IANA time zones/);
+    }
   });
 });

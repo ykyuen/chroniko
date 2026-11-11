@@ -4,6 +4,7 @@ import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseTime } from '../src/chroniko.js';
 import { timeTicks } from '../src/scales/clock.js';
+import { utc } from '../src/zone.js';
 import LOCALES from '../src/locales/index.js';
 
 const HOUR = 3_600_000;
@@ -92,5 +93,38 @@ describe('ticks across DST in America/New_York', () => {
   test('day steps fall on local midnight, so DST days are 23 or 25 hours wide', () => {
     assert.deepEqual(gaps(ticks('2026-03-01', '2026-03-15', 1400)), [24, 24, 24, 24, 24, 24, 24, 23, 24, 24, 24, 24, 24, 24]);
     assert.deepEqual(gaps(ticks('2026-10-25', '2026-11-08', 1400)), [24, 24, 24, 24, 24, 24, 24, 25, 24, 24, 24, 24, 24, 24]);
+  });
+});
+
+// The same views in the UTC zone, on a machine in New York: New York's DST
+// changes must not show up at all.
+describe('ticks in the UTC zone, on a machine in America/New_York', () => {
+  inZone('America/New_York');
+
+  const utcTicks = (a, b, width) => {
+    const [start, end] = [Date.parse(a), Date.parse(b)];
+    return timeTicks(start, end, width / (end - start), 90, en, utc);
+  };
+
+  test('hour steps are evenly spaced on the nights New York changes clocks', () => {
+    const forward = utcTicks('2026-03-08T05:00Z', '2026-03-08T11:00Z', 600);
+    assert.deepEqual(forward.map((t) => t.label), ['05:00', '06:00', '07:00', '08:00', '09:00', '10:00', '11:00']);
+    assert.deepEqual(gaps(forward), [1, 1, 1, 1, 1, 1]);
+    const back = utcTicks('2026-11-01T04:00Z', '2026-11-01T10:00Z', 600);
+    assert.deepEqual(back.map((t) => t.label), ['04:00', '05:00', '06:00', '07:00', '08:00', '09:00', '10:00']);
+    assert.deepEqual(gaps(back), [1, 1, 1, 1, 1, 1]);
+  });
+
+  test('longer steps fall on round UTC times', () => {
+    const day = utcTicks('2026-03-08T00:00Z', '2026-03-09T00:00Z', 1000);
+    assert.deepEqual(day.map((t) => t.label), ['8 Mar', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00', '9 Mar']);
+    assert.deepEqual(gaps(day), [3, 3, 3, 3, 3, 3, 3, 3]);
+  });
+
+  test('day steps fall on UTC midnight and are all 24 hours', () => {
+    const days = utcTicks('2026-03-01T00:00Z', '2026-03-15T00:00Z', 1400);
+    assert.equal(days[0].value, Date.parse('2026-03-01T00:00Z'));
+    assert.deepEqual(gaps(days), Array(14).fill(24));
+    assert.deepEqual(gaps(utcTicks('2026-10-25T00:00Z', '2026-11-08T00:00Z', 1400)), Array(14).fill(24));
   });
 });

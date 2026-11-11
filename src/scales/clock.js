@@ -7,7 +7,7 @@
 // The scale tag lets formatDate() tell it apart from a historical date.
 
 import LOCALES from '../locales/index.js';
-import { local } from '../zone.js';
+import { local, utc } from '../zone.js';
 import { durationWords } from './duration.js';
 
 const MINUTE = 60_000;
@@ -46,7 +46,7 @@ export function parseTime(input, zone = local) {
 
   const precision = fraction ? 'ms' : second != null ? 'second' : hour != null ? 'minute' : 'day';
   const offset = m[8];
-  const value = offset ? zonelessInstant(fields) - offsetMs(offset) : zone.instant(fields);
+  const value = offset ? utc.instant(fields) - offsetMs(offset) : zone.instant(fields);
   return { scale: 'clock', value, precision };
 }
 
@@ -63,15 +63,6 @@ function timeProblem({ year, month, day, hour, minute, second }) {
 function daysInMonth(year, month) {
   const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
   return [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
-}
-
-// Wall-clock fields read as UTC. Not Date.UTC(year, …), which reads years
-// 0–99 as 1900–1999.
-function zonelessInstant({ year, month, day, hour, minute, second, ms }) {
-  const d = new Date(0);
-  d.setUTCFullYear(year, month - 1, day);
-  d.setUTCHours(hour, minute, second, ms);
-  return d.getTime();
 }
 
 function offsetMs(offset) {
