@@ -83,6 +83,12 @@ describe('setEvents', () => {
     assert.equal(item(timeline, 'science-2').to, null);
   });
 
+  test('an end in the same year as a more precise start is not before it', () => {
+    const timeline = make();
+    timeline.setEvents([{ id: 'x', title: 'X', start: '1453-05-29', end: '1453' }]);
+    assert.deepEqual([item(timeline, 'x').from > 1453, item(timeline, 'x').to], [true, 1454]);
+  });
+
   test('throws, naming the event, and leaves the timeline unchanged', () => {
     const timeline = make();
     const before = ids(timeline);
@@ -92,6 +98,7 @@ describe('setEvents', () => {
       [[{ title: 'No start' }], /event "No start" has no start date/],
       [[{ title: 'Bad', start: '1453-13' }], /event "Bad" has an invalid start: invalid date/],
       [[{ title: 'Bad end', start: 1, end: 'soon' }], /event "Bad end" has an invalid end: cannot parse date/],
+      [[{ title: 'Backwards', start: '1453-05-29', end: '1450' }], /event "Backwards" ends \(1450\) before it starts \(1453-05-29\)/],
       [[{ id: 'x', title: 'A', start: 1 }, { id: 'x', title: 'B', start: 2 }], /events "A" and "B" share the id "x"; ids must be unique/],
     ];
     for (const [list, error] of bad) {
@@ -140,6 +147,7 @@ describe('addEvents', () => {
       [[{ title: 'Good', start: 1400 }, 5], /event 1 passed to addEvents must be an object, not a number/],
       [{ id: 'hyw', title: 'Again', start: 1400 }, /events "Hundred Years' War" and "Again" share the id "hyw"/],
       [null, /event 0 passed to addEvents must be an object, not null/],
+      [[{ title: 'Good', start: 1400 }, { title: 'Backwards', start: 1400, end: 1398 }], /event "Backwards" ends \(1398\) before it starts \(1400\)/],
     ];
     for (const [list, error] of bad) {
       assert.throws(() => timeline.addEvents(list), error);
@@ -228,6 +236,9 @@ describe('updateEvent', () => {
       [['plague', { id: 'pest' }], /updateEvent cannot change the id of "plague"; remove the event and add it again/],
       [['plague', { start: '1347-02-30' }], /event "Black Death" has an invalid start: invalid date/],
       [['plague', { start: undefined }], /event "Black Death" has no start date/],
+      // The patch's start is after the kept end, and the patch's end before the kept start.
+      [['plague', { start: '1360' }], /event "Black Death" ends \(1351\) before it starts \(1360\)/],
+      [['plague', { end: '1340' }], /event "Black Death" ends \(1340\) before it starts \(1347\)/],
     ];
     for (const [args, error] of bad) {
       assert.throws(() => timeline.updateEvent(...args), error);

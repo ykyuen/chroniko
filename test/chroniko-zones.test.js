@@ -197,6 +197,18 @@ describe('updateEvent after a zone switch', () => {
     assert.deepEqual(span(timeline, 'oncall'), [utc('2026-11-04T00:00Z'), utc('2026-11-04T16:00Z')]);
   });
 
+  test('a date-only end on the day of a timed start is not before it', () => {
+    const timeline = clock();
+    timeline.setTimeZone('UTC');
+    // Read in UTC, 4 Nov runs to midnight UTC, after 09:00 UTC.
+    timeline.updateEvent('deploy', { start: '2026-11-04T09:00', end: '2026-11-04' });
+    assert.deepEqual(span(timeline, 'deploy'), [utc('2026-11-04T09:00Z'), utc('2026-11-05T00:00Z')]);
+    assert.throws(
+      () => timeline.updateEvent('deploy', { end: '2026-11-03' }),
+      /event "Deploy" ends \(2026-11-03\) before it starts \(2026-11-04T09:00\)/,
+    );
+  });
+
   test('removes an end, and still needs a start', () => {
     const timeline = clock();
     timeline.setTimeZone('UTC');

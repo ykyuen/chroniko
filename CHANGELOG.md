@@ -4,11 +4,20 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 ## [Unreleased]
 
+### Changed
+
+- `setState` with a `timeZone` on the historical scale throws `setState timeZone needs timeScale: 'clock'`. Before, it blamed `setTimeZone`.
+- A backwards visible range given as `Date` objects shows them as ISO strings in the error, e.g. `zoomTo start (2026-11-05T00:00:00.000Z) must be before zoomTo end (2026-11-04T00:00:00.000Z)`. Before, it showed their long `toString()` form.
+
+### Fixed
+
+- `setEvents`, `addEvents` and `updateEvent` throw when an event ends before it starts, e.g. `event "Black Death" ends (1340) before it starts (1347)`, and leave the timeline unchanged. Before, such an event was accepted and drawn backwards, and `updateEvent` could move a start past an end the patch didn't change. An end is compared by where its range stops, so a date-only end on the start's day, or a year end in the start's year, is fine.
+
 ## [0.6.1] - 2026-11-11
 
 ### Changed
 
-- Errors for a bad visible range name the call and the date that was wrong, e.g. `setState start is invalid: cannot parse time "nope"`, `zoomTo end is missing` or `the start option (1500) must be before the end option (1300)`. Before, `setState` and the `start` and `end` options blamed `zoomTo`, and an unparseable date didn't say where it came from. Likewise, `setState` with a `timeZone` on the historical scale throws `setState timeZone needs timeScale: 'clock'` instead of blaming `setTimeZone`, and a backwards range given as `Date` objects shows them as ISO strings, e.g. `(2026-11-05T00:00:00.000Z)`, instead of their long `toString()` form.
+- Errors for a bad visible range name the call and the date that was wrong, e.g. `setState start is invalid: cannot parse time "nope"`, `zoomTo end is missing` or `the start option (1500) must be before the end option (1300)`. Before, `setState` and the `start` and `end` options blamed `zoomTo`, and an unparseable date didn't say where it came from.
 
 ### Fixed
 

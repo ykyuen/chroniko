@@ -95,6 +95,12 @@ function checkObject(value, what) {
   throw new Error(`Chroniko: ${what} must be an object, not ${kind}`);
 }
 
+// A date as the caller gave it, for an error message. A Date is shown as an
+// ISO string, not its long toString() form; it parsed, so it is valid.
+function shown(input) {
+  return input instanceof Date ? input.toISOString() : input;
+}
+
 // Id for an event without one: its category, lowercased with whitespace runs
 // turned into hyphens, then its position in the input array, e.g.
 // "olympic-game-3". Events without a category use "event", e.g. "event-3".
@@ -341,10 +347,7 @@ export class Chroniko {
     const from = read('start', start);
     const to = read('end', end);
     if (from >= to) {
-      // A Date is shown as an ISO string, not its long toString() form. It
-      // parsed, so it is a valid date.
-      const show = (input) => (input instanceof Date ? input.toISOString() : input);
-      throw new Error(`Chroniko: ${name('start')} (${show(start)}) must be before ${name('end')} (${show(end)})`);
+      throw new Error(`Chroniko: ${name('start')} (${shown(start)}) must be before ${name('end')} (${shown(end)})`);
     }
     return [from, to];
   }
@@ -959,9 +962,9 @@ export class Chroniko {
 
   // ---- Event data ------------------------------------------------------------
 
-  // The internal record for an event. Throws, naming the event, on bad dates.
-  // kept holds already parsed dates to use as they are: start, or end with
-  // its range end (to).
+  // The internal record for an event. Throws, naming the event, on bad dates
+  // and on an end before the start. kept holds already parsed dates to use as
+  // they are: start, or end with its range end (to).
   _toItem(event, id, kept = {}) {
     const date = (field) => {
       if (Object.hasOwn(kept, field)) return kept[field];
@@ -975,13 +978,21 @@ export class Chroniko {
     const start = date('start');
     if (!start) throw new Error(`Chroniko: event "${event.title ?? id}" has no start date`);
     const end = date('end');
+    const to = Object.hasOwn(kept, 'to') ? kept.to : end ? this.scale.rangeEnd(end) : null;
+    // Compared by where the range stops, so a date-only end on the start's
+    // day (or a historical end in the start's year) is fine.
+    if (to != null && to < start.value) {
+      throw new Error(
+        `Chroniko: event "${event.title ?? id}" ends (${shown(event.end)}) before it starts (${shown(event.start)})`,
+      );
+    }
     return {
       event,
       id,
       start,
       end,
       from: start.value,
-      to: Object.hasOwn(kept, 'to') ? kept.to : end ? this.scale.rangeEnd(end) : null,
+      to,
       category: event.category ?? null,
       // A single string is one tag; blanks and repeats are dropped.
       tags: [...new Set([event.tags ?? []].flat().map((t) => String(t).trim()).filter(Boolean))],

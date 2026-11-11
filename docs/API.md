@@ -127,7 +127,7 @@ Every option is optional.
 | ------------- | --------------------- | -------- | ----------- |
 | `title`       | `string`              | yes      | Shown on the timeline and in the story. |
 | `start`       | [`DateInput`](#dates) | yes      | When the event starts. |
-| `end`         | [`DateInput`](#dates) | no       | When it ends. An event with an `end` is drawn as a bar; one without is drawn as a point. |
+| `end`         | [`DateInput`](#dates) | no       | When it ends. An event with an `end` is drawn as a bar; one without is drawn as a point. An end before the start throws; an end covering the start's day (or year) is fine. |
 | `id`          | `string \| number`    | no       | A unique id. Ids are compared as strings, so `7` and `'7'` are the same id. If you leave it out, one is generated (see [Generated ids](#generated-ids)). |
 | `category`    | `string`              | no       | Sets the event's color and its entry in the legend filter. |
 | `tags`        | `string \| string[]`  | no       | Tags shown on the event's card and in the tag bar. A single string is one tag. Blank and repeated tags are dropped. |
