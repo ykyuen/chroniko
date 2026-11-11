@@ -102,7 +102,7 @@ describe('the timeZone option', () => {
     assert.equal(timeline.getTimeZone(), null);
     assert.equal('timeZone' in timeline.getState(), false);
     assert.throws(() => timeline.setTimeZone('UTC'), /setTimeZone needs timeScale: 'clock'/);
-    assert.throws(() => timeline.setState({ timeZone: 'UTC' }), /setTimeZone needs timeScale: 'clock'/);
+    assert.throws(() => timeline.setState({ timeZone: 'UTC' }), /setState timeZone needs timeScale: 'clock'/);
   });
 });
 

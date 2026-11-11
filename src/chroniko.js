@@ -427,11 +427,12 @@ export class Chroniko {
     this._setZone(this._zoneFor(timeZone));
   }
 
-  // The zone with this name. Throws on the historical scale, and for a name
-  // that isn't a zone.
-  _zoneFor(timeZone) {
+  // The zone with this name. Throws on the historical scale, naming the
+  // caller ("setTimeZone" or "setState timeZone"), and for a name that isn't
+  // a zone.
+  _zoneFor(timeZone, caller = 'setTimeZone') {
     if (!this.scale.zone) {
-      throw new Error("Chroniko: setTimeZone needs timeScale: 'clock'; historical dates have no time of day");
+      throw new Error(`Chroniko: ${caller} needs timeScale: 'clock'; historical dates have no time of day`);
     }
     return zoneNamed(timeZone);
   }
@@ -474,7 +475,7 @@ export class Chroniko {
     // Everything is read before anything is applied, so a state that throws
     // leaves the timeline as it was. String dates are read in the state's
     // own time zone when it has one.
-    const zone = state.timeZone != null ? this._zoneFor(state.timeZone) : null;
+    const zone = state.timeZone != null ? this._zoneFor(state.timeZone, 'setState timeZone') : null;
     const range =
       state.start != null && state.end != null
         ? this._range(state.start, state.end, 'setState', zone ? clockScale(zone) : this.scale)
