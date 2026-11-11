@@ -4,7 +4,9 @@
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseDate, parseTime, formatDate, formatDuration } from '../src/chroniko.js';
-import clock from '../src/scales/clock.js';
+import clock, { clockScale } from '../src/scales/clock.js';
+import { local, utc as utcZone } from '../src/zone.js';
+import LOCALES from '../src/locales/index.js';
 
 const HOUR = 3_600_000;
 const utc = (s) => Date.parse(s);
@@ -196,5 +198,63 @@ describe('zoneLabel', () => {
   test('names the offset, or both offsets across a DST change', () => {
     assert.equal(clock.zoneLabel(parseTime('2026-01-10').value, parseTime('2026-01-11').value), 'GMT-5');
     assert.equal(clock.zoneLabel(parseTime('2026-03-07').value, parseTime('2026-03-09').value), 'GMT-5 – GMT-4');
+  });
+});
+
+// The scale in the UTC zone, on a machine in New York (whose DST must not
+// show up). Times with Z or an offset don't depend on the zone at all.
+describe('clockScale in UTC, on a machine in America/New_York', () => {
+  inZone('America/New_York');
+  const scale = clockScale(utcZone);
+
+  test('the default scale is local time', () => {
+    assert.equal(clock.zone, local);
+    assert.equal(clockScale().zone, local);
+    assert.equal(scale.zone, utcZone);
+  });
+
+  test('offset-free strings are read in UTC', () => {
+    assert.deepEqual(scale.parse('2026-10-28'), clockTime(utc('2026-10-28T00:00Z'), 'day'));
+    assert.equal(scale.parse('2026-10-28T10:30').value, utc('2026-10-28T10:30Z'));
+    assert.equal(scale.parse('2026-03-08T02:30').value, utc('2026-03-08T02:30Z')); // skipped in New York
+  });
+
+  test('exact inputs are the same in every zone', () => {
+    for (const input of ['2026-10-28T10:30+08:00', '2026-10-28T10:30Z', 1793154600000]) {
+      assert.deepEqual(scale.parse(input), clock.parse(input));
+    }
+  });
+
+  test('a date-only range end covers the whole UTC day, 24 hours on New York DST days', () => {
+    assert.equal(scale.rangeEnd(scale.parse('2026-10-28')), utc('2026-10-29T00:00Z'));
+    assert.equal(scale.rangeEnd(scale.parse('2026-03-08')) - scale.parse('2026-03-08').value, 24 * HOUR);
+    assert.equal(scale.rangeEnd(scale.parse('2026-11-01')) - scale.parse('2026-11-01').value, 24 * HOUR);
+  });
+
+  test('formatDate and formatDuration use UTC', () => {
+    const m = { ...LOCALES.en, number: new Intl.NumberFormat('en'), plural: new Intl.PluralRules('en') };
+    const t = parseTime('2026-10-28T10:30Z');
+    assert.equal(scale.formatDate(t, m), '28 Oct 2026, 10:30');
+    assert.equal(clock.formatDate(t, m), '28 Oct 2026, 06:30');
+    // 01:00 to 04:00 New York time on 8 March is 2 hours; in UTC it's 3.
+    assert.equal(scale.formatDuration(scale.parse('2026-03-08T01:00'), scale.parse('2026-03-08T04:00'), m), '3 hours');
+    assert.equal(scale.formatDuration(scale.parse('2026-03-07T12:00'), scale.parse('2026-03-08T12:00'), m), '1 day');
+  });
+
+  test('ticks fall on UTC times', () => {
+    const [start, end] = [utc('2026-10-28T00:00Z'), utc('2026-10-29T00:00Z')];
+    const labels = scale.ticks(start, end, 1000 / (end - start), 90, { ...LOCALES.en }).map((t) => t.label);
+    assert.deepEqual(labels, ['28 Oct', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00', '29 Oct']);
+  });
+
+  test('zoneLabel is UTC, also across New York DST changes', () => {
+    assert.equal(scale.zoneLabel(utc('2026-03-07T00:00Z'), utc('2026-03-09T00:00Z')), 'UTC');
+  });
+
+  test('the empty view is today in UTC', () => {
+    const [start, end] = scale.emptyView;
+    assert.equal(end - start, 24 * HOUR);
+    assert.equal(start % (24 * HOUR), 0);
+    assert.ok(start <= Date.now() && Date.now() < end);
   });
 });

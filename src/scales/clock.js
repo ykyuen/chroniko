@@ -157,9 +157,10 @@ const UNIT_MS = { second: 1000, minute: MINUTE, hour: HOUR, day: DAY, month: 30.
 
 /**
  * Axis ticks for the view [start, end] (epoch ms) at pxPerUnit (px per ms),
- * using the smallest step that keeps labels at least minGap px apart.
- * Day and longer steps fall on local midnights, so a DST day is 23 or 25
- * hours wide. Shorter steps fall on round local wall-clock times (on the
+ * using the smallest step that keeps labels at least minGap px apart, in the
+ * zone (local time by default).
+ * Day and longer steps fall on midnights in the zone, so a DST day is 23 or 25
+ * hours wide. Shorter steps fall on round wall-clock times in the zone (on the
  * hour in zones with :30 offsets too) but are spaced by elapsed time, so an
  * hour step shows 01:00 twice on the night clocks go back.
  */
@@ -239,34 +240,47 @@ function tickLabel(f, unit, m) {
   return unit === 'second' && f.second !== 0 ? `${time}:${pad(f.second)}` : time;
 }
 
-export default {
-  parse: (input) => parseTime(input),
+/**
+ * The clock scale in a zone (see ../zone.js): offset-free strings are read,
+ * and times, ticks and the axis label shown, in that zone. Values stay epoch
+ * ms, so a timeline switches zones by swapping its scale for another zone's
+ * without moving any event.
+ */
+export function clockScale(zone = local) {
+  return {
+    zone,
+    parse: (input) => parseTime(input, zone),
 
-  // Where a range ending on this time stops: a timed end is the instant
-  // itself; a date-only end covers that whole day, like an all-day event.
-  rangeEnd(d) {
-    if (d.precision !== 'day') return d.value;
-    const { year, month, day } = local.fields(d.value);
-    return local.instant({ year, month, day: day + 1 });
-  },
+    // Where a range ending on this time stops: a timed end is the instant
+    // itself; a date-only end covers that whole day in the zone, like an
+    // all-day event.
+    rangeEnd(d) {
+      if (d.precision !== 'day') return d.value;
+      const { year, month, day } = zone.fields(d.value);
+      return zone.instant({ year, month, day: day + 1 });
+    },
 
-  ticks: timeTicks,
+    ticks: (start, end, pxPerUnit, minGap, m) => timeTicks(start, end, pxPerUnit, minGap, m, zone),
 
-  // The zone's offset for the axis, e.g. "GMT+8", or "GMT-5 – GMT-4" for a
-  // view across a DST change.
-  zoneLabel(start, end) {
-    const [a, b] = [local.offsetLabel(start), local.offsetLabel(end)];
-    return a === b ? a : `${a} – ${b}`;
-  },
-  formatDate: timeText,
-  formatDuration: timeDurationText,
+    // The zone's offset for the axis, e.g. "GMT+8", or "GMT-5 – GMT-4" for a
+    // view across a DST change.
+    zoneLabel(start, end) {
+      const [a, b] = [zone.offsetLabel(start), zone.offsetLabel(end)];
+      return a === b ? a : `${a} – ${b}`;
+    },
+    formatDate: (d, m) => timeText(d, m, zone),
+    formatDuration: (start, end, m) => timeDurationText(start, end, m, zone),
 
-  minSpan: 1000, // a second
-  maxSpan: (dataSpan) => Math.max(dataSpan * 3, DAY),
-  // fit() with no events shows today.
-  get emptyView() {
-    const { year, month, day } = local.fields(Date.now());
-    return [local.instant({ year, month, day }), local.instant({ year, month, day: day + 1 })];
-  },
-  minFitSpan: HOUR, // fit() never shows less than an hour
-};
+    minSpan: 1000, // a second
+    maxSpan: (dataSpan) => Math.max(dataSpan * 3, DAY),
+    // fit() with no events shows today in the zone.
+    get emptyView() {
+      const { year, month, day } = zone.fields(Date.now());
+      return [zone.instant({ year, month, day }), zone.instant({ year, month, day: day + 1 })];
+    },
+    minFitSpan: HOUR, // fit() never shows less than an hour
+  };
+}
+
+/** The clock scale in local time. */
+export default clockScale(local);
