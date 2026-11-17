@@ -60,7 +60,7 @@ function axisLabels(timeline) {
 // An event's tooltip, after letting the timeline render.
 function tooltip(timeline, title) {
   dom.frame();
-  return new RegExp(`title="(${title} · [^"]*)"`).exec(timeline.lanesEl.innerHTML)?.[1];
+  return timeline.lanesEl.querySelectorAll('.ck-event').map((b) => b.title).find((t) => t.startsWith(`${title} · `));
 }
 
 const clickToggle = (timeline) =>

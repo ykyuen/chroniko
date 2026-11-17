@@ -41,6 +41,8 @@ const colors = (timeline) => Object.fromEntries(timeline.items.map((it) => [it.i
 const lanes = (timeline) => Object.fromEntries(timeline.items.map((it) => [it.id, it.lane]));
 const view = (timeline) => [timeline.start, timeline.end];
 const selectedIds = (timeline) => timeline.getState().selected;
+// The labels of the events drawn in the lanes.
+const drawn = (timeline) => timeline.lanesEl.querySelectorAll('.ck-label').map((label) => label.textContent);
 
 describe('the constructor', () => {
   test('throws for a missing container or a bad option', () => {
@@ -401,18 +403,18 @@ describe('hidden categories', () => {
   test('the legend hides and shows a category', () => {
     const timeline = make();
     dom.frame();
-    assert.match(timeline.lanesEl.innerHTML, /Black Death/);
+    assert.ok(drawn(timeline).includes('Black Death'));
 
     clickOn(timeline.legendEl, '.ck-legend-item', { category: 'disease' });
     dom.frame();
     assert.deepEqual(timeline.getState().hidden, ['disease']);
-    assert.doesNotMatch(timeline.lanesEl.innerHTML, /Black Death/);
-    assert.match(timeline.lanesEl.innerHTML, /Printing press/);
+    assert.ok(!drawn(timeline).includes('Black Death'));
+    assert.ok(drawn(timeline).includes('Printing press'));
 
     clickOn(timeline.legendEl, '.ck-legend-item', { category: 'disease' });
     dom.frame();
     assert.deepEqual(timeline.getState().hidden, []);
-    assert.match(timeline.lanesEl.innerHTML, /Black Death/);
+    assert.ok(drawn(timeline).includes('Black Death'));
   });
 
   test('reveal shows a hidden event and centers it', () => {

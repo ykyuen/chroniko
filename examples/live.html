@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Chroniko live example</title>
+    <link rel="stylesheet" href="../src/chroniko.css">
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; padding: 24px 16px; font-family: system-ui, sans-serif; }
+      main { max-width: 1200px; margin: 0 auto; }
+      h1 { margin: 0 0 4px; }
+      p { margin: 0 0 16px; opacity: 0.7; }
+      .controls { margin: 0 0 16px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+      .controls select, .controls button { font: inherit; }
+      .stats { font-variant-numeric: tabular-nums; opacity: 0.7; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Chroniko: live activity</h1>
+      <p>A made-up feed of deploys, jobs, errors and alerts, generated in this page. The red line is now. Deploys and jobs appear as a point when they start and become a bar when they finish. The view follows now; zooming keeps following, and dragging, the arrow keys or Fit stop it. Tick "Follow now" to go back.</p>
+      <div class="controls">
+        <label><input type="checkbox" id="follow" checked> Follow now</label>
+        <span>
+          <label for="rate">Events per second</label>
+          <select id="rate">
+            <option value="0.5">0.5</option>
+            <option value="2" selected>2</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+          </select>
+        </span>
+        <button type="button" id="pause">Pause feed</button>
+        <span class="stats" id="stats"></span>
+        <a href="./">Historical example</a>
+        <a href="clock.html">Clock time example</a>
+      </div>
+      <div id="timeline"></div>
+    </main>
+
+    <script type="module">
+      import { Chroniko } from '../src/chroniko.js';
+
+      const SECOND = 1000;
+      const MINUTE = 60 * SECOND;
+      const MAX_EVENTS = 2000; // the oldest events are removed beyond this
+      const followBox = document.querySelector('#follow');
+
+      const timeline = new Chroniko('#timeline', {
+        timeScale: 'clock',
+        timeZones: ['local', 'UTC'],
+        start: Date.now() - 5 * MINUTE,
+        end: Date.now(),
+        follow: true,
+        onFollowChange: (following) => (followBox.checked = following),
+        colors: { deploy: '#4e79a7', job: '#59a14f', error: '#e15759', alert: '#f28e2b' },
+        textSizeToggle: true,
+      });
+      window.timeline = timeline;
+
+      // ---- A made-up feed ---------------------------------------------------
+      //
+      // Stands in for a server stream until the source option and the demo
+      // endpoint arrive. Uses only addEvents, updateEvent and removeEvents.
+
+      const services = ['api', 'web', 'worker', 'billing', 'search'];
+      const jobs = ['Sync invoices', 'Rebuild search index', 'Send digest emails', 'Rotate logs', 'Refresh cache'];
+      const errors = ['500 on /checkout', 'Timeout calling payments', 'Null pointer in worker', 'Rate limit exceeded', 'DB connection reset'];
+      const alerts = ['p99 latency above 800 ms', 'CPU above 90%', 'Queue depth above 1k', 'Disk 85% full'];
+
+      const pick = (list) => list[Math.floor(Math.random() * list.length)];
+      const between = (min, max) => min + Math.random() * (max - min);
+
+      let count = 0;
+      const order = []; // ids, oldest first
+      const open = new Set(); // started and not yet finished
+
+      function add(event) {
+        timeline.addEvents(event);
+        order.push(event.id);
+        if (order.length > MAX_EVENTS) {
+          const gone = order.splice(0, order.length - MAX_EVENTS);
+          gone.forEach((id) => open.delete(id));
+          timeline.removeEvents(gone);
+        }
+      }
+
+      // Something that started at `at` and lasts `ms`: a point until it ends,
+      // then a bar. One that has already ended is added as a bar.
+      function ranged(event, at, ms) {
+        const end = at + ms;
+        if (end <= Date.now()) return add({ ...event, start: at, end });
+        add({ ...event, start: at });
+        open.add(event.id);
+        setTimeout(() => {
+          if (!open.delete(event.id)) return; // removed in the meantime
+          timeline.updateEvent(event.id, { end });
+        }, end - Date.now());
+      }
+
+      function emit(at = Date.now()) {
+        const id = `ev-${++count}`;
+        const service = pick(services);
+        const roll = Math.random();
+        if (roll < 0.12) {
+          ranged({ id, title: `Deploy ${service} v${Math.floor(between(1, 4))}.${Math.floor(between(0, 30))}`,
+            category: 'deploy', tags: [service] }, at, between(20, 90) * SECOND);
+        } else if (roll < 0.4) {
+          ranged({ id, title: pick(jobs), category: 'job', tags: [service] }, at, between(5, 60) * SECOND);
+        } else if (roll < 0.8) {
+          add({ id, title: pick(errors), start: at, category: 'error', tags: [service] });
+        } else if (roll < 0.9) {
+          ranged({ id, title: pick(alerts), category: 'alert', tags: [service] }, at, between(10, 40) * SECOND);
+        } else {
+          add({ id, title: pick(alerts), start: at, category: 'alert', tags: [service] });
+        }
+      }
+
+      const rateSelect = document.querySelector('#rate');
+      const rate = () => Number(rateSelect.value);
+
+      // The last five minutes, so the page doesn't start empty.
+      const history = [];
+      for (let at = Date.now() - 5 * MINUTE; at < Date.now(); at += -Math.log(Math.random()) / rate() * SECOND) {
+        history.push(at);
+      }
+      history.forEach((at) => emit(at));
+
+      // New events at random, on average rate() a second.
+      let paused = false;
+      let timer = 0;
+      function next() {
+        timer = setTimeout(() => {
+          emit();
+          next();
+        }, -Math.log(Math.random()) / rate() * SECOND);
+      }
+      next();
+
+      rateSelect.addEventListener('change', () => {
+        if (paused) return;
+        clearTimeout(timer);
+        next();
+      });
+
+      const pauseButton = document.querySelector('#pause');
+      pauseButton.addEventListener('click', () => {
+        paused = !paused;
+        pauseButton.textContent = paused ? 'Resume feed' : 'Pause feed';
+        clearTimeout(timer);
+        if (!paused) next();
+      });
+
+      // Panning stops following, which unticks the box; ticking it follows again.
+      followBox.addEventListener('change', () => timeline.follow(followBox.checked));
+
+      const stats = document.querySelector('#stats');
+      setInterval(() => {
+        stats.textContent = `${timeline.items.length} events, ${open.size} running`;
+      }, 250);
+    </script>
+  </body>
+</html>

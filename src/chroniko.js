@@ -34,6 +34,9 @@ const DOT = 10; // px, point marker diameter
 const LABEL_PAD = 6; // px between marker and label
 const LANE_GAP = 12; // px kept free after a label before the next event in the lane
 const FLASH_MS = 1500; // matches the .ck-event.ck-flash animation in CSS
+const NOW_STEP_PX = 0.5; // px the "now" line may fall behind before it is moved
+const NOW_MAX_WAIT = 60_000; // ms between checks of the "now" line, at most
+const FOLLOW_MARGIN = 0.05; // share of the view kept after now while following
 
 // The UI text for a language: the built-in locale over English (so a key it
 // lacks still has text), then the caller's overrides, plus the language's
@@ -122,6 +125,14 @@ function hashParams() {
   return params;
 }
 
+// Call write(value) only if value differs from the one last written, which
+// obj keeps under key; reading styles back from the DOM would be slower.
+function writeIfChanged(obj, key, value, write) {
+  if (obj[key] === value) return;
+  obj[key] = value;
+  write(value);
+}
+
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
@@ -139,6 +150,9 @@ export class Chroniko {
    * @param {string[]} [options.timeZones] Clock scale only: the zones a toolbar control switches between,
    *                                    e.g. ['local', 'UTC'] for a toggle button. No control when omitted.
    * @param {Function} [options.onTimeZoneChange] Called with the new time zone's name when it changes.
+   * @param {boolean} [options.follow] Clock scale only: start following now, which keeps it near the
+   *                                    view's right edge as time passes. Panning stops it; zooming doesn't.
+   * @param {Function} [options.onFollowChange] Called with true or false when following starts or stops.
    * @param {*}      [options.start]    Initial visible range start (any date the time scale reads).
    * @param {*}      [options.end]      Initial visible range end. Fits all events when omitted.
    * @param {object} [options.colors]   Category → color, e.g. { war: '#c0392b' }.
@@ -180,6 +194,9 @@ export class Chroniko {
         throw new Error(`Chroniko: ${key} needs timeScale: 'clock'; historical dates have no time of day`);
       }
     }
+    if (timeScale === 'historical' && this.options.follow) {
+      throw new Error("Chroniko: follow needs timeScale: 'clock'");
+    }
     if (timeZones != null) {
       if (!Array.isArray(timeZones) || timeZones.length < 2) {
         throw new Error(`Chroniko: timeZones must be an array of at least two time zones, got ${JSON.stringify(timeZones)}`);
@@ -205,6 +222,7 @@ export class Chroniko {
     this._nextIndex = 0;
     this.start = 0;
     this.end = 1;
+    this._following = false;
     this._frame = 0;
     this._build(el);
     this._bind();
@@ -213,6 +231,8 @@ export class Chroniko {
       this._showRange(this._range(options.start, options.end, 'options'));
     }
     else this.fit();
+    // Before the hash is read, so a shared link to a view opens on that view.
+    this._following = Boolean(this.options.follow);
     if (this.options.syncUrl) {
       this._onHashChange = () => this._readHash();
       window.addEventListener('hashchange', this._onHashChange);
@@ -366,12 +386,16 @@ export class Chroniko {
     this._setView(min - span * 0.04, max + span * 0.12);
   }
 
-  /** factor < 1 zooms in, > 1 zooms out. ratio is the anchor point across the width (0–1). */
+  /**
+   * factor < 1 zooms in, > 1 zooms out. ratio is the anchor point across the
+   * width (0–1). While following, it zooms around now and keeps following.
+   */
   zoomBy(factor, ratio = 0.5) {
+    if (this._following) ratio = 1 - FOLLOW_MARGIN;
     const span = this.end - this.start;
     const anchor = this.start + span * ratio;
     const next = this._clampSpan(span * factor);
-    this._setView(anchor - next * ratio, anchor - next * ratio + next);
+    this._setView(anchor - next * ratio, anchor - next * ratio + next, true);
   }
 
   /** Pan by a number of pixels (positive moves forward in time). */
@@ -453,6 +477,30 @@ export class Chroniko {
     this.options.onTimeZoneChange?.(zone.name);
   }
 
+  /**
+   * Start (true, the default) or stop (false) following now: the view keeps
+   * now near its right edge, at the current zoom, as time passes. Clock scale
+   * only. Panning, zoomTo(), fit(), reveal() and setState() with a view stop
+   * it; zooming doesn't.
+   */
+  follow(on = true) {
+    if (!this.nowEl) throw new Error("Chroniko: follow needs timeScale: 'clock'");
+    this._setFollowing(Boolean(on));
+  }
+
+  /** Whether the view is following now. */
+  isFollowing() {
+    return this._following;
+  }
+
+  _setFollowing(on) {
+    if (on === this._following) return;
+    this._following = on;
+    // Starting moves the view to now; stopping leaves it where it is.
+    if (on) this._scheduleRender();
+    this.options.onFollowChange?.(on);
+  }
+
   /** The time zone times are shown in ('local' or 'UTC'), or null on the historical scale. */
   getTimeZone() {
     return this.scale.zone?.name ?? null;
@@ -496,6 +544,8 @@ export class Chroniko {
 
   destroy() {
     cancelAnimationFrame(this._frame);
+    this._stopLive();
+    if (this._onVisibilityChange) document.removeEventListener('visibilitychange', this._onVisibilityChange);
     clearTimeout(this._zoomTimer);
     clearTimeout(this._hintTimer);
     clearTimeout(this._hashTimer);
@@ -544,6 +594,7 @@ export class Chroniko {
             <div class="ck-grid"></div>
             <div class="ck-lanes"></div>
             <div class="ck-axis"></div>
+            ${this.options.timeScale === 'clock' ? '<div class="ck-now" aria-hidden="true" hidden></div>' : ''}
             <div class="ck-zone" hidden></div>
             <div class="ck-hint" aria-hidden="true"></div>
           </div>
@@ -556,8 +607,13 @@ export class Chroniko {
     this.viewport = this.root.querySelector('.ck-viewport');
     this.gridEl = this.root.querySelector('.ck-grid');
     this.lanesEl = this.root.querySelector('.ck-lanes');
+    this._lanesInner = document.createElement('div');
+    this._lanesInner.className = 'ck-lanes-inner';
+    this.lanesEl.append(this._lanesInner);
+    this._buttons = new Map(); // event id → its button while on screen; see _renderEvents
     this.axisEl = this.root.querySelector('.ck-axis');
     this.zoneEl = this.root.querySelector('.ck-zone');
+    this.nowEl = this.root.querySelector('.ck-now');
     this.storyEl = this.root.querySelector('.ck-story');
     this.hintEl = this.root.querySelector('.ck-hint');
     this.hintEl.innerHTML = m.hint(esc(ctrl));
@@ -687,7 +743,7 @@ export class Chroniko {
         const { dist, ratio } = pinchGeometry();
         const span = this._clampSpan((pinch.span * pinch.dist) / dist);
         const start = pinch.anchor - span * ratio;
-        this._setView(start, start + span);
+        this._setView(start, start + span, true); // a zoom; following carries on around now
         return;
       }
       if (!drag || e.pointerId !== drag.id) return;
@@ -777,6 +833,12 @@ export class Chroniko {
       this._invalidateLayout();
     };
     document.fonts?.addEventListener('loadingdone', this._onFontsLoaded);
+
+    // The live loop sleeps while the page is hidden and catches up when it's shown.
+    if (this.nowEl) {
+      this._onVisibilityChange = () => this._live();
+      document.addEventListener('visibilitychange', this._onVisibilityChange);
+    }
   }
 
   // A tag is on while every event with it is selected, and partly on while
@@ -855,8 +917,8 @@ export class Chroniko {
 
   _setSelection(ids) {
     this.selected = new Set(ids);
-    for (const el of this.lanesEl.querySelectorAll('.ck-event')) {
-      const on = this.selected.has(el.dataset.id);
+    for (const [id, { el }] of this._buttons) {
+      const on = this.selected.has(id);
       el.classList.toggle('ck-selected', on);
       el.setAttribute('aria-pressed', on);
     }
@@ -866,7 +928,10 @@ export class Chroniko {
     this.options.onSelectionChange?.(this.getSelection());
   }
 
-  _setView(start, end) {
+  // Any view change stops following, except a zoom (keepFollowing), which
+  // the next render moves back to now.
+  _setView(start, end, keepFollowing = false) {
+    if (!keepFollowing) this._setFollowing(false);
     this.start = start;
     this.end = end;
     this._scheduleRender();
@@ -1112,6 +1177,14 @@ export class Chroniko {
   }
 
   _render() {
+    // While following, a render (a zoom, new data) also brings the view to now.
+    const now = Date.now();
+    if (this._following) this._followTo(now);
+    this._draw();
+    this._live(now);
+  }
+
+  _draw() {
     if (this._pendingData) this._flushData();
     const width = this.viewport.clientWidth;
     if (!width) return;
@@ -1122,6 +1195,66 @@ export class Chroniko {
     if (this._layoutScale == null || (rescaled && !this._zooming)) this._layout(scale);
     this._renderAxis(scale, x);
     this._renderEvents(width, x);
+  }
+
+  // ---- Live loop ------------------------------------------------------------
+  //
+  // A loop separate from _scheduleRender that moves only what changes as time
+  // passes, so the time passing never relayouts or rebuilds the lanes: the
+  // "now" line, and while following, the view, which only pans. The loop
+  // wakes only when there is something to move: once now has moved
+  // NOW_STEP_PX (every frame when zoomed in to seconds, every few minutes when
+  // a day fills the view), or when now reaches a view that is ahead of it. A
+  // view that ends before now, and isn't following, never needs it. It sleeps
+  // while the page is hidden.
+  //
+  // drawnAt is the time a render has just drawn the view for; without it,
+  // the loop itself moves a following view to now.
+
+  _live(drawnAt = null) {
+    this._stopLive();
+    if (!this.nowEl) return;
+    const now = drawnAt ?? Date.now();
+    if (drawnAt == null && this._following && this._followTo(now)) this._draw();
+    const width = this.viewport.clientWidth;
+    if (!width) return;
+    const scale = width / (this.end - this.start);
+    const left = (now - this.start) * scale;
+    const inView = left >= 0 && left <= width;
+    if (inView) this.nowEl.style.transform = `translateX(${left.toFixed(1)}px)`;
+    if (this.nowEl.hidden === inView) this.nowEl.hidden = !inView;
+    if (left > width || document.hidden) return;
+    const wait = Math.min(left < 0 ? this.start - now : NOW_STEP_PX / scale, NOW_MAX_WAIT);
+    const next = () => {
+      this._liveTimer = 0;
+      this._liveFrame = requestAnimationFrame(() => {
+        this._liveFrame = 0;
+        this._live();
+      });
+    };
+    // A wait shorter than about a frame goes straight to the next frame.
+    if (wait < 16) next();
+    else this._liveTimer = setTimeout(next, wait);
+  }
+
+  // Pan the view, at its zoom, so now is FOLLOW_MARGIN of the width from its
+  // right edge. Not a _setView: it keeps following and leaves the URL alone.
+  // Returns whether the view moved.
+  _followTo(now) {
+    // Rounded to 0.01 ms: end - start drifts by float noise at epoch-ms
+    // magnitudes, and a span that drifted far enough would repack the lanes.
+    const span = Math.round((this.end - this.start) * 100) / 100;
+    const end = now + span * FOLLOW_MARGIN;
+    if (end === this.end) return false;
+    this.start = end - span;
+    this.end = end;
+    return true;
+  }
+
+  _stopLive() {
+    cancelAnimationFrame(this._liveFrame);
+    clearTimeout(this._liveTimer);
+    this._liveFrame = this._liveTimer = 0;
   }
 
   // Greedy lane packing over every visible-category event at the given scale:
@@ -1180,14 +1313,17 @@ export class Chroniko {
     this.zoneEl.hidden = !zone;
   }
 
+  // Each event on screen keeps one button, found by its id, from render to
+  // render; a render only changes what differs. Rebuilding the buttons on
+  // every render, as the view follows the time, would replace the button
+  // under the pointer between press and release, so a click, a tooltip or a
+  // hover never landed. Buttons come and go as events enter and leave the
+  // view, and stay in the events' order, which is the Tab order.
   _renderEvents(width, x) {
-    // Rebuilding the buttons drops focus, so remember which event had it.
-    const focused = this.lanesEl.contains(document.activeElement) ? document.activeElement.dataset.id : null;
-    // A revealed event pulses for FLASH_MS. Buttons are rebuilt on every render,
-    // so a negative animation-delay resumes the pulse where it was.
     const rev = this._revealing;
     const flashAge = rev ? performance.now() - rev.at : Infinity;
-    let html = '';
+    const inner = this._lanesInner;
+    const shown = [];
     for (const it of this.items) {
       if (it.lane < 0) continue;
       const isRange = it.to != null;
@@ -1202,39 +1338,91 @@ export class Chroniko {
       const right = Math.max(x2, left + labelOffset + it.labelWidth);
       if ((isRange ? x2 : right) < 0 || left > width) continue;
 
-      const top = LANE_TOP + it.lane * LANE_HEIGHT;
+      const b = this._buttons.get(it.id) ?? this._newButton(it.id);
+      b.seen = true;
+      shown.push(b);
+      const { el, label } = b;
       const on = this.selected.has(it.id);
       const flash = rev?.id === it.id && flashAge < FLASH_MS;
+      // A revealed event pulses for FLASH_MS. A button that comes into view
+      // mid-pulse starts it where it is, by a negative animation-delay; one
+      // revealed again restarts it.
+      const flashAt = flash ? rev.at : null;
+      if (flashAt !== b.flashAt) {
+        b.flashAt = flashAt;
+        el.style.animationDelay = flash ? `-${Math.round(flashAge)}ms` : '';
+        if (flash && el.classList.contains('ck-flash')) {
+          el.classList.remove('ck-flash');
+          void el.offsetWidth; // restart the animation
+        }
+      }
       const cls =
         `ck-event ${isRange ? 'ck-range' : 'ck-point'}${on ? ' ck-selected' : ''}` +
         `${this._hoverClass(it)}${flash ? ' ck-flash' : ''}`;
-      const style =
-        `--ck-color:${esc(it.color)};left:${left.toFixed(1)}px;top:${top}px` +
-        (flash ? `;animation-delay:-${Math.round(flashAge)}ms` : '');
-      const title = esc(it.event.title ?? '');
-      const attrs = `type="button" class="${cls}" data-id="${esc(it.id)}" aria-pressed="${on}"
-        title="${title} · ${esc(this._rangeText(it))}"`;
-      html += isRange
-        ? `<button ${attrs} style="${style};width:${Math.max(x2 - x1, 4).toFixed(1)}px">
-             <span class="ck-label" style="left:${labelOffset.toFixed(1)}px">${title}</span></button>`
-        : `<button ${attrs} style="${style}">
-             <span class="ck-dot"></span><span class="ck-label">${title}</span></button>`;
+      if (el.className !== cls) el.className = cls;
+      const pressed = String(on);
+      if (el.getAttribute('aria-pressed') !== pressed) el.setAttribute('aria-pressed', pressed);
+
+      const title = it.event.title ?? '';
+      writeIfChanged(b, 'text', title, () => (label.textContent = title));
+      const tooltip = `${title} · ${this._rangeText(it)}`;
+      writeIfChanged(b, 'tooltip', tooltip, () => (el.title = tooltip));
+      writeIfChanged(b, 'color', it.color, () => el.style.setProperty('--ck-color', it.color));
+      writeIfChanged(b, 'left', `${left.toFixed(1)}px`, (v) => (el.style.left = v));
+      writeIfChanged(b, 'top', `${LANE_TOP + it.lane * LANE_HEIGHT}px`, (v) => (el.style.top = v));
+      writeIfChanged(b, 'width', isRange ? `${Math.max(x2 - x1, 4).toFixed(1)}px` : '', (v) => (el.style.width = v));
+      writeIfChanged(b, 'labelLeft', isRange ? `${labelOffset.toFixed(1)}px` : '', (v) => (label.style.left = v));
+      // A point has a dot before its label; a point that gets an end loses it.
+      if (isRange && b.dot) {
+        b.dot.remove();
+        b.dot = null;
+      } else if (!isRange && !b.dot) {
+        b.dot = document.createElement('span');
+        b.dot.className = 'ck-dot';
+        el.insertBefore(b.dot, label);
+      }
     }
-    const height = LANE_TOP * 2 + this._laneCount * LANE_HEIGHT;
-    this.lanesEl.innerHTML = `<div class="ck-lanes-inner" style="height:${height}px">${html}</div>`;
-    if (focused != null) {
-      const el = [...this.lanesEl.querySelectorAll('.ck-event')].find((b) => b.dataset.id === focused);
-      // An event panned out of view can't keep focus; keep it in the timeline.
-      (el ?? this.viewport).focus({ preventScroll: true });
+
+    // Buttons whose event left the view, or is gone or hidden. A focused one
+    // can't keep focus; keep it in the timeline.
+    for (const [id, b] of this._buttons) {
+      if (b.seen) {
+        b.seen = false;
+        continue;
+      }
+      if (b.el === document.activeElement) this.viewport.focus({ preventScroll: true });
+      b.el.remove();
+      this._buttons.delete(id);
     }
+    // Put the buttons in the events' order, moving only those out of place:
+    // new ones, and any whose event moved past another.
+    let prev = null;
+    for (const { el } of shown) {
+      const want = prev ? prev.nextSibling : inner.firstChild;
+      if (el !== want) inner.insertBefore(el, want);
+      prev = el;
+    }
+    writeIfChanged(this, '_lanesHeight', `${LANE_TOP * 2 + this._laneCount * LANE_HEIGHT}px`, (v) => (inner.style.height = v));
     if (rev?.pending) this._finishReveal(rev);
+  }
+
+  _newButton(id) {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.dataset.id = id;
+    const label = document.createElement('span');
+    label.className = 'ck-label';
+    el.append(label);
+    const b = { el, label, dot: null, flashAt: null, seen: false };
+    this._buttons.set(id, b);
+    return b;
   }
 
   // After reveal() has moved the view: scroll the event's lane into view inside
   // the timeline, bring the timeline on screen and focus the event.
   _finishReveal(rev) {
     rev.pending = false;
-    const el = [...this.lanesEl.querySelectorAll('.ck-event')].find((b) => b.dataset.id === rev.id);
+    const el = this._buttons.get(rev.id)?.el;
     if (!el) return;
     const lanes = this.lanesEl;
     if (el.offsetTop < lanes.scrollTop || el.offsetTop + el.offsetHeight > lanes.scrollTop + lanes.clientHeight) {

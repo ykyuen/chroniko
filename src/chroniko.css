@@ -26,6 +26,7 @@
   --ck-border: #d8dee4;
   --ck-grid: #eef1f4;
   --ck-focus: #0969da;
+  --ck-now: #cf222e;
 
   font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--ck-fg);
@@ -44,6 +45,7 @@
     --ck-border: #30363d;
     --ck-grid: #1c2128;
     --ck-focus: #4493f8;
+    --ck-now: #f85149;
   }
 }
 
@@ -238,6 +240,21 @@
   bottom: 0;
   width: 1px;
   background: var(--ck-grid);
+}
+
+/* Clock scale: the current time, moved with transform so it never relayouts. */
+.ck-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  background: var(--ck-now);
+  pointer-events: none;
+}
+
+.ck-now[hidden] {
+  display: none;
 }
 
 .ck-lanes {
