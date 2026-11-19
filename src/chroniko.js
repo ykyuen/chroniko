@@ -392,7 +392,7 @@ export class Chroniko {
     this._assignColors([item]);
     this._itemsChanged();
     this._measureLabels([item]);
-    this._layoutScale = null;
+    if (!this._keepLane(old, item)) this._layoutScale = null;
     this._dataChanged(this.selected.has(id));
   }
 
@@ -1499,6 +1499,7 @@ export class Chroniko {
   _layout(scale) {
     this._layoutScale = scale;
     this._laneEnds = [];
+    this._laneLast = []; // the event packed last into each lane; see _keepLane
     this._pack(this.items);
   }
 
@@ -1509,23 +1510,63 @@ export class Chroniko {
     const scale = this._layoutScale;
     const laneEnds = this._laneEnds;
     for (const it of items) {
-      if (it.category && this.hidden.has(it.category)) {
+      if (this._isHidden(it)) {
         it.lane = -1;
         continue;
       }
-      const isRange = it.to != null;
-      const x1 = it.from * scale;
-      const x2 = isRange ? it.to * scale : x1;
-      const left = isRange ? x1 : x1 - DOT / 2;
-      const labelOffset = isRange ? LABEL_PAD : DOT + LABEL_PAD;
-      // A running bar keeps growing, so its lane stays taken until it ends.
-      const right = it.running ? Infinity : Math.max(x2, left + labelOffset + it.labelWidth) + LANE_GAP;
+      const left = this._packedLeft(it, scale);
+      const right = this._packedRight(it, scale);
       let lane = laneEnds.findIndex((end) => end <= left);
       if (lane < 0) lane = laneEnds.push(right) - 1;
       else laneEnds[lane] = right;
       it.lane = lane;
+      it.packedRight = right;
+      this._laneLast[lane] = it;
     }
     this._laneCount = laneEnds.length;
+  }
+
+  _isHidden(item) {
+    return Boolean(item.category && this.hidden.has(item.category));
+  }
+
+  // Where an event's marker starts, and where the space it takes in its lane
+  // (marker, label and the gap after them) ends, at a layout scale.
+  _packedLeft(item, scale) {
+    return item.to != null ? item.from * scale : item.from * scale - DOT / 2;
+  }
+
+  _packedRight(item, scale) {
+    // A running bar keeps growing, so its lane stays taken until it ends.
+    if (item.running) return Infinity;
+    const isRange = item.to != null;
+    const x2 = (isRange ? item.to : item.from) * scale;
+    const labelOffset = isRange ? LABEL_PAD : DOT + LABEL_PAD;
+    return Math.max(x2, this._packedLeft(item, scale) + labelOffset + item.labelWidth) + LANE_GAP;
+  }
+
+  // Whether updateEvent can keep an event in its lane rather than repack
+  // every event: it starts at the same place and takes no more space than
+  // it was packed into, so it can't overlap the next event in the lane. A
+  // running event closing, which is most updates in a live feed, always
+  // qualifies. If it was the last event packed into its lane, the lane's end
+  // moves back with it, so events added later can use the space.
+  _keepLane(old, item) {
+    const scale = this._layoutScale;
+    if (scale == null || item.from !== old.from || this._isHidden(item) !== this._isHidden(old)) return false;
+    if (old.lane < 0) {
+      item.lane = -1;
+      return true;
+    }
+    const right = this._packedRight(item, scale);
+    if (!(right <= old.packedRight)) return false;
+    item.lane = old.lane;
+    item.packedRight = right;
+    if (this._laneLast[old.lane] === old) {
+      this._laneLast[old.lane] = item;
+      this._laneEnds[old.lane] = right;
+    }
+    return true;
   }
 
   _invalidateLayout() {

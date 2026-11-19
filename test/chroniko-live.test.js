@@ -519,7 +519,19 @@ describe('running events', () => {
     assert.equal(laneOf(timeline, 'deploy'), 1);
     timeline.updateEvent('job', { end: '2026-11-17T09:47:00Z', running: false });
     dom.frame();
+    // Closing it moves nothing; the next full packing (a zoom) uses the space.
+    assert.deepEqual([laneOf(timeline, 'job'), laneOf(timeline, 'deploy')], [0, 1]);
+    timeline.zoomBy(0.5);
+    dom.frame();
     assert.equal(laneOf(timeline, 'deploy'), 0);
+  });
+
+  test('closing one frees the rest of its lane for events added later', () => {
+    const timeline = running([job()]);
+    timeline.updateEvent('job', { end: '2026-11-17T09:47:00Z', running: false });
+    timeline.addEvents({ id: 'alert', title: 'Alert', start: '2026-11-17T09:55:00Z' });
+    dom.frame();
+    assert.equal(laneOf(timeline, 'alert'), 0);
   });
 
   test('keep their lane when events arrive after where they reached when packed', () => {

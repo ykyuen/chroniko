@@ -140,7 +140,7 @@ timeline.removeEvents(id);
 - `updateEvent(id, patch)` merges `patch` into the event, e.g. `{ end: '1945-09-02' }`; a field set to `undefined` is removed. It throws if there is no event with that id, if the patch changes the id (remove the event and add it again instead), or if the result is invalid, and then leaves the event as it was.
 - `removeEvents(ids)` takes one id or an array; unknown ids are ignored. Removed events leave the selection, and `onSelectionChange` is called if the selection changed.
 - The view doesn't move, and selected events stay selected. Call `fit()` to show everything again.
-- Events added later than all others keep the lanes of those already shown. An earlier event, an update or a removal rearranges the lanes.
+- Events added later than all others keep the lanes of those already shown. So does an update that keeps the event's start and takes no more room than before, such as closing a [running event](#running-events) or shortening a title. An earlier event, any other update, or a removal rearranges the lanes.
 - The legend, tag bar and story are redrawn once per animation frame, however many calls were made in it, so adding events one at a time is cheap.
 
 ### Historical time scale
@@ -311,6 +311,21 @@ source: (api) => {
 - If the source itself throws, the timeline is removed and the error passes through the constructor.
 - To combine several streams, open them all in one source, and return one cleanup that closes them all. Their events share one set of ids.
 - `npm start` serves a demo stream at `/events`; see [`scripts/serve.js`](scripts/serve.js) and [`examples/live.html`](examples/live.html).
+
+#### Performance
+
+Measured with the live example's feed at 20 new events a second, a few hundred of them running at any time, `maxEvents: 5000`, and the view following now at a 5-minute span, so all 5,000 events are in view. Headless Chromium 136, without a GPU, on a laptop with an Intel Core i7-12700H:
+
+| Measure | Result |
+| ------- | ------ |
+| Frame rate | 57–59 fps |
+| Frame time | 16.7 ms median, 16.8 ms at the 95th percentile |
+| Long tasks (over 50 ms) | none in 60 seconds |
+| JavaScript heap after garbage collection | about 6 MB through a 60-second run |
+
+- Following and panning move the lanes, axis and grid together with one CSS transform, so events don't have to be moved one by one as time passes. Events, labels and tooltips are only redrawn when they change.
+- Every event in view has a button, so frame time grows with the number of events in view, not the number kept. To keep a busy feed fast, zoom in, or limit what's kept with `retain` and `maxEvents`.
+- These are one machine's results. A slower device, or many more events in view, will take longer per frame.
 
 ### Sharing
 

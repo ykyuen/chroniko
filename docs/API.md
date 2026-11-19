@@ -348,7 +348,7 @@ timeline.updateEvent('deploy-42', { end: '2026-10-30', description: undefined })
 ```
 
 - The view doesn't change, and a selected event stays selected. Its card in the story is redrawn.
-- The timeline may rearrange its rows.
+- If the start stays the same and the event takes no more room than before (its bar and label), as when a [running event](#running-events) is closed, every event keeps its row. Otherwise the timeline may rearrange its rows.
 
 #### `removeEvents(ids)`
 

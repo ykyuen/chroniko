@@ -6,7 +6,7 @@
 import { describe, test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Chroniko } from '../src/chroniko.js';
-import { installDom } from './support/fake-dom.js';
+import { installDom, clickOn } from './support/fake-dom.js';
 
 let dom;
 beforeEach(() => {
@@ -263,5 +263,105 @@ describe('work skipped while events stream in', () => {
     timeline.panBy(100);
     dom.frame();
     assert.deepEqual([axis.writes, grid.writes], [1, 1]);
+  });
+});
+
+describe('updateEvent and the lanes', () => {
+  // An update that can't overlap the next event in its lane keeps the lanes;
+  // see _keepLane. _layout is the full packing.
+  const laneOf = (timeline, id) => timeline.items.find((it) => it.id === id).lane;
+  const repacked = (timeline, act) => {
+    let layouts = 0;
+    const layout = timeline._layout.bind(timeline);
+    timeline._layout = (...args) => {
+      layouts += 1;
+      return layout(...args);
+    };
+    act();
+    dom.frame();
+    timeline._layout = layout;
+    return layouts > 0;
+  };
+
+  test('an update that keeps the start and takes no more space keeps every lane', () => {
+    const timeline = make();
+    const lanes = timeline.items.map((it) => [it.id, it.lane]);
+    assert.equal(repacked(timeline, () => timeline.updateEvent('plague', { end: 1350, description: 'Shorter' })), false);
+    assert.deepEqual(timeline.items.map((it) => [it.id, it.lane]), lanes);
+    // An end of 1350 covers that year: the bar is 1347–1351, 4 years at 5px.
+    assert.equal(button(timeline, 'plague').style.width, '20.0px');
+  });
+
+  test('an update that moves the start, or takes more space, packs the lanes again', () => {
+    const timeline = make();
+    assert.equal(repacked(timeline, () => timeline.updateEvent('plague', { start: 1346 })), true);
+    // Its label is wider than the bar: an end under the label takes no more
+    // space, one past it does.
+    assert.equal(repacked(timeline, () => timeline.updateEvent('plague', { end: 1360 })), false);
+    assert.equal(repacked(timeline, () => timeline.updateEvent('plague', { end: 1400 })), true);
+    assert.equal(repacked(timeline, () => timeline.updateEvent('press', { title: 'The printing press with movable type' })), true);
+    assert.equal(repacked(timeline, () => timeline.updateEvent('press', { title: 'Press' })), false);
+  });
+
+  test('an update that hides or shows the event by its category packs the lanes again', () => {
+    const timeline = make();
+    clickOn(timeline.legendEl, '.ck-legend-item', { category: 'disease' });
+    dom.frame();
+    assert.equal(laneOf(timeline, 'plague'), -1);
+    assert.equal(repacked(timeline, () => timeline.updateEvent('plague', { title: 'Plague' })), false);
+    assert.equal(laneOf(timeline, 'plague'), -1);
+    assert.equal(repacked(timeline, () => timeline.updateEvent('plague', { category: 'war' })), true);
+    assert.notEqual(laneOf(timeline, 'plague'), -1);
+  });
+});
+
+describe('lanes under a stream of changes', () => {
+  test('never overlap, however events are added, closed, retitled or removed', () => {
+    // A small deterministic generator, so a failure can be replayed.
+    let seed = 7;
+    const random = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    const timeline = new Chroniko(dom.container, { timeScale: 'clock', start: 0, end: 600_000 });
+    try {
+      dom.frame();
+      const ids = [];
+      let at = 0;
+      for (let step = 0; step < 600; step++) {
+        const roll = random();
+        if (roll < 0.5 || !ids.length) {
+          at += Math.floor(random() * 4000);
+          const id = `e${step}`;
+          timeline.addEvents({ id, title: 'x'.repeat(1 + Math.floor(random() * 12)), start: at, running: random() < 0.4 });
+          ids.push(id);
+        } else {
+          const id = ids[Math.floor(random() * ids.length)];
+          const it = timeline.items.find((i) => i.id === id);
+          if (roll < 0.75 && it.running) timeline.updateEvent(id, { end: it.from + Math.floor(random() * 20_000), running: false });
+          else if (roll < 0.9) timeline.updateEvent(id, { title: 'y'.repeat(1 + Math.floor(random() * 12)) });
+          else {
+            timeline.removeEvents(id);
+            ids.splice(ids.indexOf(id), 1);
+          }
+        }
+        dom.frame();
+        // Each event's space now, at the layout scale, must end before the next
+        // event in its lane starts.
+        const scale = timeline._layoutScale;
+        const byLane = new Map();
+        for (const it of timeline.items) {
+          if (it.lane < 0) continue;
+          if (!byLane.has(it.lane)) byLane.set(it.lane, []);
+          byLane.get(it.lane).push(it);
+        }
+        for (const lane of byLane.values()) {
+          for (let i = 1; i < lane.length; i++) {
+            const prev = timeline._packedRight(lane[i - 1], scale);
+            const left = timeline._packedLeft(lane[i], scale);
+            assert.ok(prev <= left + 1e-6, `step ${step}: ${lane[i - 1].id} overlaps ${lane[i].id} in lane ${lane[i].lane}`);
+          }
+        }
+      }
+    } finally {
+      timeline.destroy(); // stops the running-text timer, which this file doesn't mock
+    }
   });
 });
