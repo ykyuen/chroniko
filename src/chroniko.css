@@ -470,10 +470,31 @@
   }
 }
 
-/* Without motion: a steady ring for the same time, then nothing. */
+/* A newly added event (addEvents) flashes once, more softly than a reveal,
+   since many may arrive each second. Same duration, FLASH_MS. */
+.ck-event.ck-new {
+  border-radius: 6px;
+  animation: ck-event-new 1.5s ease-out;
+}
+
+@keyframes ck-event-new {
+  from {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ck-color) 45%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
+/* Without motion: a reveal shows a steady ring for the same time, then
+   nothing; new arrivals don't flash. */
 @media (prefers-reduced-motion: reduce) {
   .ck-event.ck-flash {
     animation-timing-function: step-end;
+  }
+
+  .ck-event.ck-new {
+    animation: none;
   }
 }
 

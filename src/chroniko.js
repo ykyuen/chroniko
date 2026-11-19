@@ -250,6 +250,7 @@ export class Chroniko {
     this.end = 1;
     this._following = false;
     this._frame = 0;
+    this._building = true; // until the constructor returns; see addEvents
     this._build(el);
     this._bind();
     this.setEvents(options.events ?? []);
@@ -268,6 +269,7 @@ export class Chroniko {
     }
     // Last, so what the source adds first lands on the view the page opens on.
     if (this.options.source) this._startSource(this.options.source);
+    this._building = false;
   }
 
   // Call the source option with { add, update, remove }. A function it
@@ -343,6 +345,12 @@ export class Chroniko {
       .sort((a, b) => a.from - b.from);
     this._checkIds([...this.items, ...added]);
     this._nextIndex += events.length;
+    // New arrivals flash once drawn; not those added while the timeline is
+    // built, e.g. a source's backfill of history.
+    if (!this._building) {
+      const at = performance.now();
+      for (const it of added) it.addedAt = at;
+    }
     // Events arriving in time order can be packed into the existing lanes;
     // anything earlier needs the whole layout redone.
     const appended = !this.items.length || !added.length || added[0].from >= this.items.at(-1).from;
@@ -1511,7 +1519,7 @@ export class Chroniko {
   // view, and stay in the events' order, which is the Tab order.
   _renderEvents(width, x) {
     const rev = this._revealing;
-    const flashAge = rev ? performance.now() - rev.at : Infinity;
+    const now = performance.now();
     const inner = this._lanesInner;
     const shown = [];
     for (const it of this.items) {
@@ -1533,22 +1541,25 @@ export class Chroniko {
       shown.push(b);
       const { el, label } = b;
       const on = this.selected.has(it.id);
-      const flash = rev?.id === it.id && flashAge < FLASH_MS;
-      // A revealed event pulses for FLASH_MS. A button that comes into view
-      // mid-pulse starts it where it is, by a negative animation-delay; one
-      // revealed again restarts it.
-      const flashAt = flash ? rev.at : null;
+      // A revealed event pulses for FLASH_MS (ck-flash), and a newly added
+      // one flashes more softly for as long (ck-new); a reveal wins. A button
+      // that comes into view mid-flash starts it where it is, by a negative
+      // animation-delay; one revealed again restarts it.
+      const revealAt = rev?.id === it.id && now - rev.at < FLASH_MS ? rev.at : null;
+      const addedAt = it.addedAt != null && now - it.addedAt < FLASH_MS ? it.addedAt : null;
+      const flashAt = revealAt ?? addedAt;
+      const flash = revealAt != null ? ' ck-flash' : addedAt != null ? ' ck-new' : '';
       if (flashAt !== b.flashAt) {
         b.flashAt = flashAt;
-        el.style.animationDelay = flash ? `-${Math.round(flashAge)}ms` : '';
-        if (flash && el.classList.contains('ck-flash')) {
-          el.classList.remove('ck-flash');
+        el.style.animationDelay = flash ? `-${Math.round(now - flashAt)}ms` : '';
+        if (flash && el.classList.contains(flash.trim())) {
+          el.classList.remove(flash.trim());
           void el.offsetWidth; // restart the animation
         }
       }
       const cls =
         `ck-event ${isRange ? 'ck-range' : 'ck-point'}${it.running ? ' ck-running' : ''}${on ? ' ck-selected' : ''}` +
-        `${this._hoverClass(it)}${flash ? ' ck-flash' : ''}`;
+        `${this._hoverClass(it)}${flash}`;
       if (el.className !== cls) el.className = cls;
       const pressed = String(on);
       if (el.getAttribute('aria-pressed') !== pressed) el.setAttribute('aria-pressed', pressed);
