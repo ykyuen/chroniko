@@ -8,6 +8,8 @@ export default {
   largerText: '放大文字',
   localTime: '本地时间',
   switchTimeZone: (current, next) => `时区：${current}。切换至${next}`,
+  live: '实时',
+  followNow: (live) => `${live}：让视图跟随当前时间`,
   categories: '类别',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) => `时间轴。拖动或使用方向键平移；按 + 和 −、${ctrl} + 滚轮或双指缩放。`,

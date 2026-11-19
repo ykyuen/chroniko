@@ -9,6 +9,8 @@ export default {
   largerText: '大啲字',
   localTime: '本地時間',
   switchTimeZone: (current, next) => `時區：${current}。轉去${next}`,
+  live: '即時',
+  followNow: (live) => `${live}：畫面跟住而家嘅時間`,
   categories: '類別',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) => `時間軸。拖或者用方向鍵左右移；撳 + 同 −、${ctrl} + 碌滾輪或者用兩隻手指縮放。`,

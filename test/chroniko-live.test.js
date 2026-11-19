@@ -363,3 +363,69 @@ describe('zooming while following', () => {
     assert.equal(nowLine(timeline), 950);
   });
 });
+
+const clickLive = (timeline) =>
+  timeline.root.querySelector('.ck-controls').fire('click', {
+    target: { closest: () => ({ dataset: { action: 'live' } }) },
+  });
+const pressed = (timeline) => timeline.liveEl.getAttribute('aria-pressed');
+
+describe('the Live button', () => {
+  test('is there only with the follow option', () => {
+    const timeline = clock(NOW - HOUR, NOW);
+    assert.equal(timeline.liveEl, null);
+    assert.doesNotMatch(timeline.root.innerHTML, /ck-live/);
+  });
+
+  test('comes first in the toolbar, with its text in its label', () => {
+    const timeline = following({ timeZones: ['local', 'UTC'] });
+    const controls = /<div class="ck-controls">\s*(<button[^>]*>)<span class="ck-live-dot"><\/span>([^<]*)<\/button>/
+      .exec(timeline.root.innerHTML);
+    assert.match(controls[1], /data-action="live"/);
+    assert.match(controls[1], /aria-label="Live: keep the view on the current time"/);
+    assert.equal(controls[2], 'Live');
+    assert.equal(pressed(timeline), 'true');
+  });
+
+  test('follow: false shows it, not pressed, without following', () => {
+    const timeline = following({ follow: false });
+    assert.equal(timeline.isFollowing(), false);
+    assert.equal(pressed(timeline), 'false');
+    assert.deepEqual(viewOf(timeline), [NOW - 20 * MINUTE, NOW - 10 * MINUTE]);
+  });
+
+  test('follow: false still needs the clock scale', () => {
+    assert.throws(
+      () => new Chroniko(dom.container, { follow: false }),
+      { message: "Chroniko: follow needs timeScale: 'clock'" },
+    );
+  });
+
+  test('clicking it jumps to now at the current zoom, and clicking again stops', () => {
+    const timeline = following({ follow: false });
+    clickLive(timeline);
+    dom.frame();
+    assert.equal(timeline.isFollowing(), true);
+    assert.equal(pressed(timeline), 'true');
+    assert.deepEqual(viewOf(timeline), [NOW - 9.5 * MINUTE, NOW + 0.5 * MINUTE]);
+    clickLive(timeline);
+    assert.equal(timeline.isFollowing(), false);
+    assert.equal(pressed(timeline), 'false');
+    assert.deepEqual(timeline.calls, [true, false]);
+  });
+
+  test('is unpressed when panning stops following, and pressed by follow()', () => {
+    const timeline = following();
+    timeline.panBy(-100);
+    assert.equal(pressed(timeline), 'false');
+    timeline.follow();
+    assert.equal(pressed(timeline), 'true');
+  });
+
+  test('is translated, and uiText can replace its text', () => {
+    const japanese = following({ language: 'ja' });
+    assert.match(japanese.root.innerHTML, /aria-label="ライブ：表示を現在時刻に合わせ続ける"><span class="ck-live-dot"><\/span>ライブ</);
+    const custom = following({ uiText: { live: 'On air' } });
+    assert.match(custom.root.innerHTML, /aria-label="On air: keep the view on the current time"><span class="ck-live-dot"><\/span>On air</);
+  });
+});

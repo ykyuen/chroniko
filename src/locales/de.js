@@ -8,6 +8,8 @@ export default {
   largerText: 'Größere Schrift',
   localTime: 'Ortszeit',
   switchTimeZone: (current, next) => `${current} (Zeitzone). Wechseln zu: ${next}`,
+  live: 'Live',
+  followNow: (live) => `${live}: Ansicht folgt der aktuellen Zeit`,
   categories: 'Kategorien',
   ctrlKey: 'Strg',
   viewport: (ctrl) =>

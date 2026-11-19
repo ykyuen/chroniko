@@ -19,6 +19,11 @@ export default {
   // speech input can find the button by what it shows.
   localTime: 'Local time',
   switchTimeZone: (current, next) => `${current} (time zone). Switch to ${next}`,
+  // The Live button, shown with the follow option. followNow() is its tooltip
+  // and accessible label, and gets the button's text (plain, not escaped),
+  // which it must contain, best at the start, as with switchTimeZone().
+  live: 'Live',
+  followNow: (live) => `${live}: keep the view on the current time`,
   categories: 'Categories',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) => `Timeline. Drag or use arrow keys to pan; press + and −, ${ctrl}+scroll or pinch to zoom.`,

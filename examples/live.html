@@ -19,9 +19,8 @@
   <body>
     <main>
       <h1>Chroniko: live activity</h1>
-      <p>A made-up feed of deploys, jobs, errors and alerts, generated in this page. The red line is now. Deploys and jobs appear as a point when they start and become a bar when they finish. The view follows now; zooming keeps following, and dragging, the arrow keys or Fit stop it. Tick "Follow now" to go back.</p>
+      <p>A made-up feed of deploys, jobs, errors and alerts, generated in this page. The red line is now. Deploys and jobs appear as a point when they start and become a bar when they finish. The view follows now while the ● Live button is lit; zooming keeps following, and dragging, the arrow keys or Fit stop it. Press ● Live to go back.</p>
       <div class="controls">
-        <label><input type="checkbox" id="follow" checked> Follow now</label>
         <span>
           <label for="rate">Events per second</label>
           <select id="rate">
@@ -45,7 +44,6 @@
       const SECOND = 1000;
       const MINUTE = 60 * SECOND;
       const MAX_EVENTS = 2000; // the oldest events are removed beyond this
-      const followBox = document.querySelector('#follow');
 
       const timeline = new Chroniko('#timeline', {
         timeScale: 'clock',
@@ -53,7 +51,6 @@
         start: Date.now() - 5 * MINUTE,
         end: Date.now(),
         follow: true,
-        onFollowChange: (following) => (followBox.checked = following),
         colors: { deploy: '#4e79a7', job: '#59a14f', error: '#e15759', alert: '#f28e2b' },
         textSizeToggle: true,
       });
@@ -152,8 +149,6 @@
         if (!paused) next();
       });
 
-      // Panning stops following, which unticks the box; ticking it follows again.
-      followBox.addEventListener('change', () => timeline.follow(followBox.checked));
 
       const stats = document.querySelector('#stats');
       setInterval(() => {

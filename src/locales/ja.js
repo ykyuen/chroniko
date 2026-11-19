@@ -8,6 +8,8 @@ export default {
   largerText: '文字を大きく',
   localTime: '現地時間',
   switchTimeZone: (current, next) => `${current}（タイムゾーン）。${next}に切り替え`,
+  live: 'ライブ',
+  followNow: (live) => `${live}：表示を現在時刻に合わせ続ける`,
   categories: 'カテゴリ',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) =>

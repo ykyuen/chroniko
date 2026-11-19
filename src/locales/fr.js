@@ -9,6 +9,8 @@ export default {
   largerText: 'Texte plus grand',
   localTime: 'Heure locale',
   switchTimeZone: (current, next) => `${current} (fuseau horaire). Passer à : ${next}`,
+  live: 'Direct',
+  followNow: (live) => `${live} : suivre l’heure actuelle`,
   categories: 'Catégories',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) =>

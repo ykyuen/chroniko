@@ -10,6 +10,8 @@ export default {
   largerText: 'Większy tekst',
   localTime: 'Czas lokalny',
   switchTimeZone: (current, next) => `${current} (strefa czasowa). Przełącz na: ${next}`,
+  live: 'Na żywo',
+  followNow: (live) => `${live}: śledź bieżący czas`,
   categories: 'Kategorie',
   ctrlKey: 'Ctrl',
   viewport: (ctrl) =>

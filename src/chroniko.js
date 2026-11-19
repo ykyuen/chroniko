@@ -150,8 +150,9 @@ export class Chroniko {
    * @param {string[]} [options.timeZones] Clock scale only: the zones a toolbar control switches between,
    *                                    e.g. ['local', 'UTC'] for a toggle button. No control when omitted.
    * @param {Function} [options.onTimeZoneChange] Called with the new time zone's name when it changes.
-   * @param {boolean} [options.follow] Clock scale only: start following now, which keeps it near the
-   *                                    view's right edge as time passes. Panning stops it; zooming doesn't.
+   * @param {boolean} [options.follow] Clock scale only: start following now (true) or not (false), which
+   *                                    keeps now near the view's right edge as time passes. Panning stops it;
+   *                                    zooming doesn't. Either value adds a Live toolbar button that toggles it.
    * @param {Function} [options.onFollowChange] Called with true or false when following starts or stops.
    * @param {*}      [options.start]    Initial visible range start (any date the time scale reads).
    * @param {*}      [options.end]      Initial visible range end. Fits all events when omitted.
@@ -194,7 +195,7 @@ export class Chroniko {
         throw new Error(`Chroniko: ${key} needs timeScale: 'clock'; historical dates have no time of day`);
       }
     }
-    if (timeScale === 'historical' && this.options.follow) {
+    if (timeScale === 'historical' && this.options.follow != null) {
       throw new Error("Chroniko: follow needs timeScale: 'clock'");
     }
     if (timeZones != null) {
@@ -233,6 +234,7 @@ export class Chroniko {
     else this.fit();
     // Before the hash is read, so a shared link to a view opens on that view.
     this._following = Boolean(this.options.follow);
+    this.liveEl?.setAttribute('aria-pressed', this._following);
     if (this.options.syncUrl) {
       this._onHashChange = () => this._readHash();
       window.addEventListener('hashchange', this._onHashChange);
@@ -496,6 +498,7 @@ export class Chroniko {
   _setFollowing(on) {
     if (on === this._following) return;
     this._following = on;
+    this.liveEl?.setAttribute('aria-pressed', on);
     // Starting moves the view to now; stopping leaves it where it is.
     if (on) this._scheduleRender();
     this.options.onFollowChange?.(on);
@@ -578,6 +581,7 @@ export class Chroniko {
           <div class="ck-toolbar">
             <div class="ck-legend" role="group" aria-label="${esc(m.categories)}"></div>
             <div class="ck-controls">
+              ${this.options.follow != null ? `<button type="button" data-action="live" class="ck-live" aria-pressed="false" aria-label="${esc(m.followNow(m.live))}"><span class="ck-live-dot"></span>${esc(m.live)}</button>` : ''}
               ${this._zoneNames ? '<button type="button" data-action="time-zone" class="ck-zone-toggle"></button>' : ''}
               <button type="button" data-action="zoom-in" aria-label="${esc(m.zoomIn)}">+</button>
               <button type="button" data-action="zoom-out" aria-label="${esc(m.zoomOut)}">−</button>
@@ -618,6 +622,7 @@ export class Chroniko {
     this.hintEl = this.root.querySelector('.ck-hint');
     this.hintEl.innerHTML = m.hint(esc(ctrl));
     this.zoneToggleEl = this.root.querySelector('.ck-zone-toggle');
+    this.liveEl = this.root.querySelector('.ck-live');
     this._syncZoneToggle();
   }
 
@@ -638,6 +643,7 @@ export class Chroniko {
       else if (action === 'dim') this._toggleDim(e.target.closest('button'));
       else if (action === 'text-size') this._toggleTextSize(e.target.closest('button'));
       else if (action === 'time-zone') this.setTimeZone(this._nextZone());
+      else if (action === 'live') this.follow(!this._following);
     });
 
     this.tagbarEl.addEventListener('click', (e) => {

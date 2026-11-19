@@ -123,6 +123,29 @@
   color: var(--ck-focus);
 }
 
+/* The Live button (follow option): its dot turns the "now" line's colour while following. */
+.ck-controls .ck-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ck-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ck-muted);
+}
+
+.ck-controls .ck-live[aria-pressed="true"] {
+  border-color: var(--ck-now);
+  color: var(--ck-now);
+}
+
+.ck-live[aria-pressed="true"] .ck-live-dot {
+  background: var(--ck-now);
+}
+
 .ck-controls button:hover,
 .ck-legend-item:hover {
   border-color: var(--ck-muted);
