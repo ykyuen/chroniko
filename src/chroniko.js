@@ -163,6 +163,10 @@ export class Chroniko {
    *                                    than this many ms ago. Running events stay.
    * @param {number} [options.maxEvents] Keep at most this many events, dropping those that start first.
    *                                    Running events stay, even beyond it.
+   * @param {Function} [options.source] Called once with { add, update, remove } (addEvents, updateEvent and
+   *                                    removeEvents) to feed the timeline, e.g. from an EventSource or a
+   *                                    WebSocket. May return a cleanup function, or a Promise of one, which
+   *                                    destroy() calls; calls made after destroy() are ignored.
    * @param {*}      [options.start]    Initial visible range start (any date the time scale reads).
    * @param {*}      [options.end]      Initial visible range end. Fits all events when omitted.
    * @param {object} [options.colors]   Category → color, e.g. { war: '#c0392b' }.
@@ -216,6 +220,9 @@ export class Chroniko {
     if (maxEvents != null && !(Number.isInteger(maxEvents) && maxEvents > 0)) {
       throw new Error(`Chroniko: maxEvents must be a positive whole number, got ${JSON.stringify(maxEvents)}`);
     }
+    if (this.options.source != null && typeof this.options.source !== 'function') {
+      throw new Error(`Chroniko: source must be a function, got ${typeof this.options.source}`);
+    }
     if (timeZones != null) {
       if (!Array.isArray(timeZones) || timeZones.length < 2) {
         throw new Error(`Chroniko: timeZones must be an array of at least two time zones, got ${JSON.stringify(timeZones)}`);
@@ -259,6 +266,35 @@ export class Chroniko {
       this._readHash();
       clearTimeout(this._hashTimer); // loading the page shouldn't rewrite its URL
     }
+    // Last, so what the source adds first lands on the view the page opens on.
+    if (this.options.source) this._startSource(this.options.source);
+  }
+
+  // Call the source option with { add, update, remove }. A function it
+  // returns, or a Promise resolves to, is its cleanup, called once by
+  // destroy(); one that resolves after destroy() is called at once. Anything
+  // else is ignored, e.g. the ids from `(api) => api.add(events)`. Calls the
+  // source makes after destroy() are ignored, so a message arriving late
+  // doesn't throw. A source that throws removes the timeline, and the error
+  // passes through.
+  _startSource(source) {
+    const live = (fn) => (...args) => (this._destroyed ? undefined : fn.apply(this, args));
+    const api = { add: live(this.addEvents), update: live(this.updateEvent), remove: live(this.removeEvents) };
+    let result;
+    try {
+      result = source(api);
+    } catch (err) {
+      this.destroy();
+      throw err;
+    }
+    const take = (cleanup) => {
+      if (typeof cleanup !== 'function') return;
+      if (this._destroyed) cleanup();
+      else this._sourceCleanup = cleanup;
+    };
+    // A rejection is left unhandled, so it shows in the console.
+    if (typeof result?.then === 'function') result.then(take);
+    else take(result);
   }
 
   // ---- Public API ---------------------------------------------------------
@@ -618,6 +654,8 @@ export class Chroniko {
   }
 
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
     cancelAnimationFrame(this._frame);
     this._stopLive();
     if (this._onVisibilityChange) document.removeEventListener('visibilitychange', this._onVisibilityChange);
@@ -630,6 +668,10 @@ export class Chroniko {
     this._resizeObserver.disconnect();
     document.fonts?.removeEventListener('loadingdone', this._onFontsLoaded);
     this.root.remove();
+    // Last: the rest is torn down even if the source's cleanup throws.
+    const cleanup = this._sourceCleanup;
+    this._sourceCleanup = null;
+    cleanup?.();
   }
 
   // ---- DOM & interaction ---------------------------------------------------

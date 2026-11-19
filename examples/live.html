@@ -44,23 +44,11 @@
       const SECOND = 1000;
       const MINUTE = 60 * SECOND;
 
-      const timeline = new Chroniko('#timeline', {
-        timeScale: 'clock',
-        timeZones: ['local', 'UTC'],
-        start: Date.now() - 5 * MINUTE,
-        end: Date.now(),
-        follow: true,
-        retain: 30 * MINUTE, // events that ended longer ago are dropped
-        maxEvents: 2000, // and beyond this many, those that started first
-        colors: { deploy: '#4e79a7', job: '#59a14f', error: '#e15759', alert: '#f28e2b' },
-        textSizeToggle: true,
-      });
-      window.timeline = timeline;
-
       // ---- A made-up feed ---------------------------------------------------
       //
-      // Stands in for a server stream until the source option and the demo
-      // endpoint arrive. Uses only addEvents and updateEvent: retain and
+      // Stands in for a server stream until the demo endpoint arrives. It is
+      // the timeline's source: it gets { add, update, remove } and returns a
+      // cleanup that destroy() calls. Uses only add and update: retain and
       // maxEvents drop old events, and running ones always stay, so closing
       // one never finds it gone.
 
@@ -72,21 +60,25 @@
       const pick = (list) => list[Math.floor(Math.random() * list.length)];
       const between = (min, max) => min + Math.random() * (max - min);
 
+      const rateSelect = document.querySelector('#rate');
+      const rate = () => Number(rateSelect.value);
+
+      let api = null; // the source's { add, update, remove } while it runs
       let count = 0;
-      const open = new Set(); // started and not yet finished
-      const add = (event) => timeline.addEvents(event);
+      const open = new Map(); // id → timer, started and not yet finished
+      let paused = false;
+      let timer = 0;
 
       // Something that started at `at` and lasts `ms`: a running bar that
       // grows until it ends. One that has already ended is added as a bar.
       function ranged(event, at, ms) {
         const end = at + ms;
-        if (end <= Date.now()) return add({ ...event, start: at, end });
-        add({ ...event, start: at, running: true });
-        open.add(event.id);
-        setTimeout(() => {
+        if (end <= Date.now()) return api.add({ ...event, start: at, end });
+        api.add({ ...event, start: at, running: true });
+        open.set(event.id, setTimeout(() => {
           open.delete(event.id);
-          timeline.updateEvent(event.id, { end, running: false });
-        }, end - Date.now());
+          api.update(event.id, { end, running: false });
+        }, end - Date.now()));
       }
 
       function emit(at = Date.now()) {
@@ -99,37 +91,53 @@
         } else if (roll < 0.4) {
           ranged({ id, title: pick(jobs), category: 'job', tags: [service] }, at, between(5, 60) * SECOND);
         } else if (roll < 0.8) {
-          add({ id, title: pick(errors), start: at, category: 'error', tags: [service] });
+          api.add({ id, title: pick(errors), start: at, category: 'error', tags: [service] });
         } else if (roll < 0.9) {
           ranged({ id, title: pick(alerts), category: 'alert', tags: [service] }, at, between(10, 40) * SECOND);
         } else {
-          add({ id, title: pick(alerts), start: at, category: 'alert', tags: [service] });
+          api.add({ id, title: pick(alerts), start: at, category: 'alert', tags: [service] });
         }
       }
 
-      const rateSelect = document.querySelector('#rate');
-      const rate = () => Number(rateSelect.value);
-
-      // The last five minutes, so the page doesn't start empty.
-      const history = [];
-      for (let at = Date.now() - 5 * MINUTE; at < Date.now(); at += -Math.log(Math.random()) / rate() * SECOND) {
-        history.push(at);
-      }
-      history.forEach((at) => emit(at));
-
       // New events at random, on average rate() a second.
-      let paused = false;
-      let timer = 0;
       function next() {
         timer = setTimeout(() => {
           emit();
           next();
         }, -Math.log(Math.random()) / rate() * SECOND);
       }
-      next();
+
+      function feed(timelineApi) {
+        api = timelineApi;
+        // The last five minutes, so the page doesn't start empty.
+        for (let at = Date.now() - 5 * MINUTE; at < Date.now(); at += -Math.log(Math.random()) / rate() * SECOND) {
+          emit(at);
+        }
+        if (!paused) next();
+        return () => {
+          clearTimeout(timer);
+          open.forEach((t) => clearTimeout(t));
+          open.clear();
+          api = null;
+        };
+      }
+
+      const timeline = new Chroniko('#timeline', {
+        timeScale: 'clock',
+        timeZones: ['local', 'UTC'],
+        start: Date.now() - 5 * MINUTE,
+        end: Date.now(),
+        follow: true,
+        retain: 30 * MINUTE, // events that ended longer ago are dropped
+        maxEvents: 2000, // and beyond this many, those that started first
+        source: feed,
+        colors: { deploy: '#4e79a7', job: '#59a14f', error: '#e15759', alert: '#f28e2b' },
+        textSizeToggle: true,
+      });
+      window.timeline = timeline;
 
       rateSelect.addEventListener('change', () => {
-        if (paused) return;
+        if (paused || !api) return;
         clearTimeout(timer);
         next();
       });
@@ -139,7 +147,7 @@
         paused = !paused;
         pauseButton.textContent = paused ? 'Resume feed' : 'Pause feed';
         clearTimeout(timer);
-        if (!paused) next();
+        if (!paused && api) next();
       });
 
       const stats = document.querySelector('#stats');
