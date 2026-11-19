@@ -4,6 +4,24 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 ## [Unreleased]
 
+### Added
+
+- Live mode on the clock scale, for activity feeds of deploys, jobs, incidents or alerts. See the README's "Live mode" section.
+- A red "now" line on the clock scale, drawn whenever the current time is in view. Its color is the new `--ck-now` custom property.
+- `follow` option: `true` keeps now near the view's right edge as time passes, at the current zoom. Panning (dragging, scrolling sideways, the arrow keys, `panBy`, `zoomTo`, `fit`, `reveal`, `setState` with a view) stops following; zooming doesn't, and zooms around now. `true` or `false` adds a **● Live** toolbar button, lit while following, that starts and stops it.
+- `follow(on)`, `isFollowing()` and the `onFollowChange(following)` callback.
+- Running events: `running: true` draws a bar from the start to now that grows as time passes, and keeps its row until it ends. Its tooltip and story card say how long it has run, e.g. "running for 15 minutes, 12 seconds", updated every second. Close it with `updateEvent(id, { end, running: false })`. A running event with an `end` throws, as does `running` on the historical scale.
+- `retain` option (clock scale): drops events that ended more than that many ms ago. `maxEvents` option: keeps at most that many events, dropping those that start first. Running events are never dropped. Dropped events leave the selection, calling `onSelectionChange`, and don't make the rows rearrange.
+- `source` option: a function called once at the end of the constructor with `{ add, update, remove }`, to feed the timeline from Server-Sent Events, a WebSocket or polling. A cleanup function it returns, or resolves to, is called by `destroy()`. Calls after `destroy()` are ignored.
+- Events added with `addEvents` (or a source's `add`) flash once. Events added during construction don't. Nothing flashes under `prefers-reduced-motion`.
+- `getState()` includes `following` on the clock scale, and `setState({ following })` starts or stops following, at the span of the view it sets, if any. With `syncUrl`, the hash stores `ck-live=<span in ms>` instead of `ck-view` while following, so it isn't rewritten as time passes; opening such a link follows now at that span.
+- New locale strings in all 13 languages, which `uiText` can override: `live` and `followNow(live)` for the Live button, and `runningFor(date, duration)`.
+- A third example page, `examples/live.html`, streamed from a new `/events` Server-Sent Events endpoint in `npm start`'s server. The page makes up the feed itself when that endpoint isn't there.
+
+### Changed
+
+- `destroy()` can be called more than once; the calls after the first do nothing.
+
 ## [0.6.2] - 2026-11-17
 
 ### Changed

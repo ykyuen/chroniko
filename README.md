@@ -25,6 +25,8 @@ Add `?story=right` to the example's URL to see the [story beside the timeline](#
 
 A second page, `http://localhost:3000/examples/clock.html`, shows a day of deploys, jobs and incidents on the [clock time scale](#clock-time-scale), with a toolbar button that switches between local time and UTC.
 
+A third, `http://localhost:3000/examples/live.html`, shows [live mode](#live-mode): a made-up feed of deploys, jobs, errors and alerts, streamed from the example server's `/events` endpoint, with the view following the current time.
+
 ## Usage
 
 The minified files can be loaded from jsDelivr without installing anything.
@@ -64,6 +66,7 @@ The minified files can be loaded from jsDelivr without installing anything.
 | `title`       | yes      | |
 | `start`       | yes      | A date in the time scale's format, e.g. `"1453-05-29"` or `-221`. See [Historical time scale](#historical-time-scale) and [Clock time scale](#clock-time-scale). An invalid date throws an error naming the event. |
 | `end`         | no       | Same formats as `start`. If set, the event is drawn as a bar. An end before the start throws. |
+| `running`     | no       | Clock scale only. `true` for an event that has started and not yet ended: a bar from `start` to now that grows as time passes. It can't have an `end`. See [Running events](#running-events). |
 | `id`          | no       | Must be unique. See [Event ids](#event-ids). |
 | `category`    | no       | Used for colors and the legend filter. |
 | `tags`        | no       | Array of strings, shown as tags on the event's card in the story. Tags are toggles with three states: a tag is on while every event with it is selected, partly on (light grey fill) while only some are, and off while none are. Clicking an off or partly-on tag adds all its events to the selection; clicking an on tag removes them all again. When any event has tags, a collapsible **Tags** bar between the toolbar and the timeline lists them all, with how many events have each; those tags are clickable too. A single string is one tag. Blank and repeated tags are dropped. |
@@ -92,6 +95,11 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 | `timeZone`          | `'local' \| 'UTC'`   | no       | `'local'` | Clock scale only: the zone times are shown in, and offset-free strings read in. See [Time zones](#time-zones). |
 | `timeZones`         | `string[]`           | no       | N/A     | Clock scale only: the zones a toolbar button switches between, e.g. `['local', 'UTC']`. No button when omitted. See [Time zones](#time-zones). |
 | `onTimeZoneChange`  | `function(timeZone)` | no       | N/A     | Called with the new zone's name when the time zone changes. |
+| `follow`            | `boolean`            | no       | N/A     | Clock scale only: start following the current time (`true`) or not (`false`). Either value adds a **● Live** toolbar button. See [Following now](#following-now). |
+| `onFollowChange`    | `function(following)` | no      | N/A     | Called with `true` or `false` when following starts or stops. |
+| `retain`            | `number`             | no       | N/A     | Clock scale only: drop events that ended more than this many ms ago. See [Retention](#retention). |
+| `maxEvents`         | `number`             | no       | N/A     | Keep at most this many events, dropping those that start first. See [Retention](#retention). |
+| `source`            | `function(api)`      | no       | N/A     | Feeds the timeline from a stream, e.g. Server-Sent Events or a WebSocket. See [Sources](#sources). |
 | `start`             | `number \| string`   | no       | Fit all events | Start of the initial visible range. Same formats as event dates, or a fractional year (epoch ms on the clock scale). Only used if `end` is also set. |
 | `end`               | `number \| string`   | no       | Fit all events | End of the initial visible range. Only used if `start` is also set. |
 | `colors`            | `object`             | no       | `{}`    | Category → color, e.g. `{ war: '#c0392b' }`. Categories without a color get one from the built-in palette. |
@@ -110,7 +118,7 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 
 ### Methods
 
-`setEvents(events)`, `addEvents(events)`, `updateEvent(id, patch)`, `removeEvents(ids)`, `zoomTo(start, end)`, `zoomBy(factor)`, `panBy(px)`, `fit()`, `select(id)`, `deselect(id)`, `toggle(id)`, `clearSelection()`, `getSelection()`, `reveal(id)`, `setTimeZone(timeZone)`, `getTimeZone()`, `getState()`, `setState(state)`, `destroy()`.
+`setEvents(events)`, `addEvents(events)`, `updateEvent(id, patch)`, `removeEvents(ids)`, `zoomTo(start, end)`, `zoomBy(factor)`, `panBy(px)`, `fit()`, `select(id)`, `deselect(id)`, `toggle(id)`, `clearSelection()`, `getSelection()`, `reveal(id)`, `setTimeZone(timeZone)`, `getTimeZone()`, `follow(on)`, `isFollowing()`, `getState()`, `setState(state)`, `destroy()`.
 
 See the [API reference](docs/API.md) for every method's parameters, return value and errors.
 
@@ -205,9 +213,108 @@ timeline.getTimeZone();          // 'local'
 - **Offset-free strings are read in the zone in use when they're added**, and keep that instant afterwards. So `"2026-11-04"` added in local time stays at local midnight, and after switching to UTC it starts at, say, 16:00 the day before for a viewer in Hong Kong. Its tooltip and story card then show the time as well, e.g. "3 Nov 2026, 16:00", since the bare date would be a day off. Use epoch ms or strings with an offset if events must not depend on the zone.
 - **Only `'local'` and `'UTC'` are supported** in this version. Other values, such as `'Asia/Tokyo'`, throw. `timeZone` and `timeZones` with the historical scale throw too, since historical dates have no time of day.
 
+### Live mode
+
+On the clock scale, a timeline can follow the current time while events stream in, for activity feeds of deploys, jobs, incidents or alerts:
+
+```js
+const timeline = new Chroniko('#timeline', {
+  timeScale: 'clock',
+  start: Date.now() - 10 * 60_000,   // the span to follow: 10 minutes
+  end: Date.now(),
+  follow: true,                      // keep now near the right edge
+  retain: 30 * 60_000,               // drop events that ended over 30 minutes ago
+  maxEvents: 5000,                   // and keep at most 5,000
+  source: (api) => {
+    const stream = new EventSource('/events');
+    stream.addEventListener('add', (e) => api.add(JSON.parse(e.data)));
+    stream.addEventListener('update', (e) => {
+      const { id, patch } = JSON.parse(e.data);
+      api.update(id, patch);
+    });
+    return () => stream.close();     // called by destroy()
+  },
+});
+```
+
+Chroniko is meant for meaningful events, not raw log lines: filter high-volume logs before they reach it.
+
+On the clock scale, a red line marks the current time whenever it is in view, following or not. Its color is `--ck-now` (see [Component colors](#component-colors)).
+
+New events flash briefly when they arrive by `addEvents` (or a source's `add`). Events added while the timeline is being built, such as a source's history, don't. With `prefers-reduced-motion`, nothing flashes.
+
+#### Following now
+
+While following, the view keeps now 5% of its width from the right edge, at the current zoom, and moves as time passes.
+
+- **Panning stops following:** dragging, scrolling sideways, the arrow keys, `panBy()`, `zoomTo()`, `fit()`, `reveal()`, and `setState()` with a view. **Zooming doesn't:** the wheel, pinch, the +/− buttons and `zoomBy()` zoom around now and keep following.
+- **The ● Live button**, shown when the `follow` option is given (`true` or `false`), is lit while following. Pressing it jumps back to now at the current zoom; pressing it again stops following. Its text is the `live` [UI string](#languages).
+- `follow()` starts following and `follow(false)` stops it, with or without the option. `isFollowing()` says whether the view is following, and `onFollowChange` is called with `true` or `false` when that changes.
+- With `start` and `end`, `follow: true` follows at their span. Without them, it follows at the span that fits the events.
+- The view only pans as time passes, so following never rearranges the rows. It pauses while the page is hidden and catches up when it's shown.
+
+#### Running events
+
+An event with `running: true` has started and not yet ended. It's drawn as a bar from its start to now that grows as time passes, with an open right end. Its tooltip and story card say how long it has run so far, e.g. "17 Nov 2026, 09:45:00 – running for 15 minutes, 12 seconds", updated every second, and no more precisely than its start was given. Close it with an `end` when it finishes:
+
+```js
+timeline.addEvents({ id: 'deploy-42', title: 'Deploy api', start: Date.now(), running: true });
+// later
+timeline.updateEvent('deploy-42', { end: Date.now(), running: false });
+```
+
+- A running event can't have an `end`, so `updateEvent(id, { end })` alone throws; pass `running: false` with it. `running: false` without an `end` makes it a point at its start.
+- A running bar keeps its row to itself until it ends, so later events never sit under it.
+- `fit()` counts running events up to now.
+
+#### Retention
+
+A feed that runs for hours would otherwise keep every event. Two options drop old ones:
+
+- `retain: ms` drops events that ended more than `ms` ago (a point counts from when it happened): straight away if they're added already expired, and otherwise as they expire.
+- `maxEvents: n` keeps at most `n` events, dropping those that start first, after each `setEvents` or `addEvents`. It works on both scales.
+
+Running events are never dropped, since they haven't ended, so closing one never finds it gone; they can take the count above `maxEvents`. Selected events are dropped too: they leave the selection and `onSelectionChange` is called, as with `removeEvents`. Dropping events doesn't rearrange the rows, so a stream isn't rearranged at every arrival; the empty rows go the next time the rows are rearranged.
+
+#### Sources
+
+`source(api)` is called once, at the end of the constructor, after the view (and any [shared link](#sharing)) is set. `api` is `{ add, update, remove }`: [`addEvents`](#updating-events), `updateEvent` and `removeEvents`. Chroniko has no transport of its own, so the source can use anything:
+
+```js
+// WebSocket: messages like { op: 'add', event } or { op: 'update', id, patch }
+source: (api) => {
+  const socket = new WebSocket('wss://example.com/activity');
+  socket.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.op === 'add') api.add(msg.event);
+    else if (msg.op === 'update') api.update(msg.id, msg.patch);
+  };
+  return () => socket.close();
+},
+
+// Polling an endpoint that returns the events since a given time
+source: (api) => {
+  let since = Date.now() - 10 * 60_000;
+  const poll = async () => {
+    const from = since;
+    since = Date.now(); // taken before the request, so nothing is missed in between
+    api.add(await (await fetch(`/activity?since=${from}`)).json());
+  };
+  poll();
+  const timer = setInterval(poll, 5000);
+  return () => clearInterval(timer);
+},
+```
+
+- A function the source returns, or an `async` source resolves to, is called by `destroy()`, once. Anything else it returns is ignored.
+- Calls made through `api` after `destroy()` are ignored, so a message arriving late doesn't throw. Errors from `api` calls, such as a bad event, are thrown to the source as usual.
+- If the source itself throws, the timeline is removed and the error passes through the constructor.
+- To combine several streams, open them all in one source, and return one cleanup that closes them all. Their events share one set of ids.
+- `npm start` serves a demo stream at `/events`; see [`scripts/serve.js`](scripts/serve.js) and [`examples/live.html`](examples/live.html).
+
 ### Sharing
 
-`getState()` returns `{ start, end, selected, hidden }`: the visible range (in fractional years on the [historical](#historical-time-scale) scale, or epoch ms on the [clock](#clock-time-scale) scale), the selected event ids in chronological order, and the hidden categories. On the clock scale it also has `timeZone`. `setState(state)` restores it. Every field is optional, so `setState({ selected: ['ww2'] })` changes only the selection; unknown ids are ignored. Use these to save a story yourself, for example in `localStorage` or your own URL format.
+`getState()` returns `{ start, end, selected, hidden }`: the visible range (in fractional years on the [historical](#historical-time-scale) scale, or epoch ms on the [clock](#clock-time-scale) scale), the selected event ids in chronological order, and the hidden categories. On the clock scale it also has `timeZone`, and `following`, whether the view is [following now](#following-now). `setState(state)` restores it. Every field is optional, so `setState({ selected: ['ww2'] })` changes only the selection; unknown ids are ignored. A view (`start` and `end`) stops following unless the state also has `following: true`, which follows at that view's span. Use these to save a story yourself, for example in `localStorage` or your own URL format.
 
 With `syncUrl: true`, the timeline keeps this state in the URL hash, so the address bar is always a shareable link:
 
@@ -217,6 +324,7 @@ With `syncUrl: true`, the timeline keeps this state in the URL hash, so the addr
 
 - Opening the link restores the view, selection and hidden categories. Editing the hash on an open page applies it too.
 - On the clock scale the hash also has the time zone, e.g. `ck-tz=UTC`, so a link opens in the sender's zone.
+- While the view is following now, the hash has `ck-live=<span in ms>` instead of `ck-view`, e.g. `#ck-live=600000&ck-tz=UTC`, so it isn't rewritten as time passes. Opening such a link follows now at that span.
 - The URL is updated with `history.replaceState` shortly after each change, so it doesn't fill the back-button history. Loading the page doesn't change the URL.
 - Other hash parameters are kept, but the hash no longer works as a plain `#section` anchor once the timeline writes to it. Use `syncUrl` on one timeline per page.
 - Generated ids depend on position (see [Event ids](#event-ids)), so give events explicit ids if shared links must survive changes to the event list.
@@ -328,6 +436,7 @@ The component's colors are CSS custom properties on `.chroniko`:
 | `--ck-border`  | Borders and dividers | `#d8dee4` | `#30363d` |
 | `--ck-grid`    | Grid lines behind the events | `#eef1f4` | `#1c2128` |
 | `--ck-focus`   | Focus rings and links | `#0969da` | `#4493f8` |
+| `--ck-now`     | The "now" line on the clock scale, and the ● Live button while following | `#cf222e` | `#f85149` |
 
 Override them in your own stylesheet, loaded after `chroniko.min.css`:
 

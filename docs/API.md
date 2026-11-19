@@ -5,6 +5,11 @@ This page covers everything Chroniko exports: the `Chroniko` class, its options 
 > [!NOTE]
 > New features by version:
 >
+> - **0.7.0**
+>   - [Live mode](#live-mode): the [`follow`, `onFollowChange`, `retain`, `maxEvents` and `source`](#options) options, and [`running`](#event-object) events.
+>   - [`follow`](#followon) and [`isFollowing`](#isfollowing).
+>   - `following` in [`getState`](#getstate) and [`setState`](#setstatestate), and `ck-live` in the [URL hash](#url-hash-format).
+>   - The `--ck-now` [CSS custom property](#css-custom-properties).
 > - **0.6.0**
 >   - The [`timeZone`, `timeZones` and `onTimeZoneChange`](#options) options, for [time zones](#time-zones).
 >   - [`setTimeZone`](#settimezonetimezone) and [`getTimeZone`](#gettimezone).
@@ -27,10 +32,12 @@ This page covers everything Chroniko exports: the `Chroniko` class, its options 
 - [Options](#options)
 - [Event object](#event-object)
 - [Dates](#dates)
+- [Live mode](#live-mode)
 - [Methods](#methods)
   - [Events](#events): [`setEvents`](#seteventsevents), [`addEvents`](#addeventsevents), [`updateEvent`](#updateeventid-patch), [`removeEvents`](#removeeventsids)
   - [View](#view): [`zoomTo`](#zoomtostart-end), [`zoomBy`](#zoombyfactor-ratio), [`panBy`](#panbypx), [`fit`](#fit), [`reveal`](#revealid)
   - [Time zone](#time-zone): [`setTimeZone`](#settimezonetimezone), [`getTimeZone`](#gettimezone)
+  - [Following](#following): [`follow`](#followon), [`isFollowing`](#isfollowing)
   - [Selection](#selection): [`select`](#selectid), [`deselect`](#deselectid), [`toggle`](#toggleid), [`clearSelection`](#clearselection), [`getSelection`](#getselection)
   - [State](#state): [`getState`](#getstate), [`setState`](#setstatestate)
   - [Lifecycle](#lifecycle): [`destroy`](#destroy)
@@ -74,13 +81,15 @@ The constructor draws the timeline, loads `options.events`, and then sets the vi
 1. If both `start` and `end` are given, it shows that range.
 2. Otherwise it fits all events.
 3. With `syncUrl: true`, it then applies any state found in the URL hash.
+4. With `source`, it calls the source last. See [Sources](#sources).
 
 The constructor throws if:
 
 - the container isn't found;
 - an option has an invalid value;
 - an event is invalid;
-- two events share an id.
+- two events share an id;
+- the `source` throws (the timeline is removed first).
 
 See [Errors](#errors).
 
@@ -105,6 +114,11 @@ Every option is optional.
 | `timeZone`          | `'local' \| 'UTC'`   | `'local'` | Clock scale only. The zone times are shown in, and offset-free strings read in. See [Time zones](#time-zones). |
 | `timeZones`         | `string[]`           | —       | Clock scale only. Two or more zones for a toolbar button to switch between, e.g. `['local', 'UTC']`. No button when omitted. |
 | `onTimeZoneChange`  | `(timeZone: string) => void` | — | Called when the time zone changes. See [Callbacks](#callbacks). |
+| `follow`            | `boolean`            | —       | Clock scale only. Start [following now](#following-now) (`true`) or not (`false`). Either value adds the **● Live** toolbar button. *Since 0.7.0.* |
+| `onFollowChange`    | `(following: boolean) => void` | — | Called when following starts or stops. See [Callbacks](#callbacks). *Since 0.7.0.* |
+| `retain`            | `number`             | —       | Clock scale only. Drop events that ended more than this many ms ago. A positive number. See [Retention](#retention). *Since 0.7.0.* |
+| `maxEvents`         | `number`             | —       | Keep at most this many events, dropping those that start first. A positive whole number. See [Retention](#retention). *Since 0.7.0.* |
+| `source`            | `(api) => cleanup?`  | —       | Feeds the timeline from a stream. See [Sources](#sources). *Since 0.7.0.* |
 | `start`             | [`DateInput`](#dates) | Fit all events | Start of the first visible range. Only used if `end` is also set. |
 | `end`               | [`DateInput`](#dates) | Fit all events | End of the first visible range. Only used if `start` is also set. |
 | `colors`            | `object`             | `{}`    | Category → CSS color, e.g. `{ war: '#c0392b' }`. Categories without a color get one from the built-in palette. |
@@ -128,6 +142,7 @@ Every option is optional.
 | `title`       | `string`              | yes      | Shown on the timeline and in the story. |
 | `start`       | [`DateInput`](#dates) | yes      | When the event starts. |
 | `end`         | [`DateInput`](#dates) | no       | When it ends. An event with an `end` is drawn as a bar; one without is drawn as a point. An end before the start throws; an end covering the start's day (or year) is fine. |
+| `running`     | `boolean`             | no       | Clock scale only. `true` for an event that has started and not yet ended. It can't have an `end`. See [Running events](#running-events). *Since 0.7.0.* |
 | `id`          | `string \| number`    | no       | A unique id. Ids are compared as strings, so `7` and `'7'` are the same id. If you leave it out, one is generated (see [Generated ids](#generated-ids)). |
 | `category`    | `string`              | no       | Sets the event's color and its entry in the legend filter. |
 | `tags`        | `string \| string[]`  | no       | Tags shown on the event's card and in the tag bar. A single string is one tag. Blank and repeated tags are dropped. |
@@ -205,6 +220,71 @@ On the clock scale, times are shown in one of two zones:
 - Other zone names, such as IANA names like `'Asia/Tokyo'`, throw in this version.
 - The exported [date helpers](#date-helpers) always use local time.
 
+## Live mode
+
+*Since 0.7.0.* On the clock scale, a timeline can follow the current time while events stream in. A red line marks now whenever it is in view, following or not.
+
+### Following now
+
+While following, the view keeps now 5% of its width from its right edge, at the current zoom, and pans as time passes. It never rearranges the rows, and it pauses while the page is hidden.
+
+| Stops following | Keeps following |
+| --------------- | --------------- |
+| Dragging, scrolling sideways, the arrow keys; [`panBy`](#panbypx), [`zoomTo`](#zoomtostart-end), [`fit`](#fit), [`reveal`](#revealid); [`setState`](#setstatestate) with a view and without `following: true`; a `ck-view` in the URL hash | Zooming with the wheel, pinch, the +/− buttons or [`zoomBy`](#zoombyfactor-ratio), which zoom around now; data changes; clicks and selection |
+
+The **● Live** toolbar button is shown when the `follow` option is given, `true` or `false`. It is pressed (`aria-pressed="true"`) while following. Pressing it starts following at the current zoom, and pressing it again stops. Its text and label are the `live` and `followNow` [UI strings](#options).
+
+### Running events
+
+An event with `running: true` is drawn as a bar from its start to now, growing as time passes. Its tooltip and story card show its start and how long it has run so far, through the `runningFor` UI string, e.g. "17 Nov 2026, 09:45:00 – running for 15 minutes, 12 seconds". This text is updated every second while the page is visible, at no finer a precision than the start. A running event that starts later than now shows only its start until now reaches it.
+
+- Close it with [`updateEvent(id, { end, running: false })`](#updateeventid-patch). `running: false` without an `end` makes it a point at its start.
+- It can't have an `end` while running: an event or patch giving both throws.
+- Its row stays its own until it ends, so later events never sit under the growing bar.
+- [`fit()`](#fit) counts it up to now.
+
+### Retention
+
+| Option | Drops |
+| ------ | ----- |
+| `retain: ms` | Events whose range ended (or, for a point, that happened) more than `ms` ago. Events added already expired are dropped straight away; the rest when they expire, on a timer. |
+| `maxEvents: n` | The events that start first, beyond `n`, after each [`setEvents`](#seteventsevents) or [`addEvents`](#addeventsevents). Expired events go first. |
+
+- Running events are never dropped, even beyond `maxEvents`.
+- Dropped events leave the selection, and `onSelectionChange` is called, as with [`removeEvents`](#removeeventsids).
+- The other events keep their rows. Rows left empty go the next time the rows are rearranged.
+
+### New events
+
+Events added by [`addEvents`](#addeventsevents), or a source's `add`, flash once, for 1.5 seconds. Events added during construction, such as a source's history, don't, and neither do `setEvents` or `updateEvent`. Under `prefers-reduced-motion: reduce`, nothing flashes.
+
+### Sources
+
+```js
+source: (api) => {
+  const stream = new EventSource('/events');
+  stream.addEventListener('add', (e) => api.add(JSON.parse(e.data)));
+  stream.addEventListener('update', (e) => {
+    const { id, patch } = JSON.parse(e.data);
+    api.update(id, patch);
+  });
+  return () => stream.close();
+}
+```
+
+The `source` option is called once, at the end of the constructor, with:
+
+| `api` method | Same as |
+| ------------ | ------- |
+| `add(events)` | [`addEvents(events)`](#addeventsevents), including its return value and errors |
+| `update(id, patch)` | [`updateEvent(id, patch)`](#updateeventid-patch) |
+| `remove(ids)` | [`removeEvents(ids)`](#removeeventsids) |
+
+- **Cleanup:** a function the source returns, or a Promise resolves to, is called once by [`destroy()`](#destroy), or straight away if it resolves after `destroy()`. Any other return value is ignored.
+- After `destroy()`, `api` calls do nothing and return `undefined`.
+- If the source throws, the timeline is removed and the constructor throws that error.
+- Chroniko has no transport of its own. The [README](../README.md#sources) has WebSocket and polling examples.
+
 ## Methods
 
 ### Events
@@ -233,7 +313,7 @@ Adds one event or several, and keeps everything already on the timeline. *Since 
 | --------- | -------------------- | ----------- |
 | `events`  | `object \| object[]` | One event or an array of events. |
 
-**Returns:** `string[]`, the ids of the added events, including generated ones. They're sorted by start date.
+**Returns:** `string[]`, the ids of the added events, including generated ones. They're sorted by start date. With [retention](#retention), it includes any event dropped straight away.
 
 **Throws:** if an event has an invalid or missing date, or if its id is already used. The error names the event. In that case none of the events are added.
 
@@ -244,6 +324,7 @@ timeline.reveal(id);
 
 - The view and the selection don't change.
 - Events that start later than all existing events go into the rows already shown, so nothing moves. An earlier event makes the timeline rearrange its rows.
+- Added events [flash](#new-events) once.
 
 #### `updateEvent(id, patch)`
 
@@ -260,7 +341,7 @@ Changes some fields of one event. *Since 0.4.0.*
 
 - No event has that id.
 - `patch.id` is different from `id`. To change an id, remove the event and add it again.
-- The updated event is invalid, for example because of a bad date.
+- The updated event is invalid, for example because of a bad date, or a `running` event gets an `end` without `running: false`.
 
 ```js
 timeline.updateEvent('deploy-42', { end: '2026-10-30', description: undefined });
@@ -346,6 +427,20 @@ Events and the view stay where they are; the axis, story and tooltips are labell
 
 **Returns:** the zone in use, `'local'` or `'UTC'`, or `null` on the historical scale.
 
+### Following
+
+These need `timeScale: 'clock'`. See [Following now](#following-now). *Since 0.7.0.*
+
+#### `follow(on?)`
+
+Starts following now (`on` is `true`, the default) or stops (`false`). Starting moves the view to now at the current zoom. Works with or without the `follow` option. Calls [`onFollowChange`](#onfollowchangefollowing) if following changed, and with `syncUrl` updates the URL.
+
+**Throws:** on the historical scale.
+
+#### `isFollowing()`
+
+**Returns:** `true` while the view is following now, otherwise `false`.
+
 ### Selection
 
 Selected events are listed in the story, in chronological order.
@@ -383,6 +478,7 @@ Deselects every event.
   selected: string[]; // selected ids, in chronological order
   hidden: string[];   // hidden categories
   timeZone?: string;  // clock scale only: 'local' or 'UTC'
+  following?: boolean; // clock scale only: whether the view is following now
 }
 ```
 
@@ -392,9 +488,11 @@ Restores a state from [`getState()`](#getstate).
 
 | Parameter | Type     | Description |
 | --------- | -------- | ----------- |
-| `state`   | `object` | Any of `start` and `end` (both are needed to move the view), `selected`, `hidden`, and on the clock scale `timeZone`. |
+| `state`   | `object` | Any of `start` and `end` (both are needed to move the view), `selected`, `hidden`, and on the clock scale `timeZone` and `following`. |
 
 Every field is optional, so a partial state changes only what it contains. Unknown ids are ignored. The time zone is applied first, so string `start` and `end` values are read in it.
+
+A view stops following, unless `following` is `true`: then the view's span is followed (or the current span, without a view). `following: false` stops following. Everything is checked before anything changes.
 
 ```js
 localStorage.setItem('story', JSON.stringify(timeline.getState()));
@@ -406,7 +504,7 @@ timeline.setState({ selected: ['ww2'] }); // change only the selection
 
 #### `destroy()`
 
-Removes the timeline from the page and cleans up after it: event listeners (including the `hashchange` listener used by `syncUrl`), timers and observers. Don't call any other method on the instance afterwards.
+Removes the timeline from the page and cleans up after it: event listeners (including the `hashchange` listener used by `syncUrl`), timers and observers. Then it calls the [source](#sources)'s cleanup, if any. Calling it again does nothing. Don't call any other method on the instance afterwards.
 
 ## Callbacks
 
@@ -416,7 +514,7 @@ Called with the selected [event objects](#event-object), in chronological order,
 
 - clicking events or tags, pressing Esc, or clicking **Clear all**;
 - calling `select`, `deselect`, `toggle`, `clearSelection` or `setState`;
-- `setEvents` or `removeEvents` removing a selected event;
+- `setEvents` or `removeEvents` removing a selected event, or [retention](#retention) dropping one;
 - the URL hash changing while `syncUrl` is on.
 
 > [!IMPORTANT]
@@ -431,6 +529,16 @@ Called with the new zone's name, `'local'` or `'UTC'`, whenever the [time zone](
 - the URL hash changing while `syncUrl` is on.
 
 It isn't called for the `timeZone` option itself. Like `onSelectionChange`, it can be called during construction when `syncUrl` restores a zone from the URL.
+
+### `onFollowChange(following)`
+
+Called with `true` when the view starts [following now](#following-now), and `false` when it stops. That includes:
+
+- pressing the **● Live** button;
+- calling `follow` or `setState`, or anything that [stops following](#following-now);
+- the URL hash changing while `syncUrl` is on.
+
+It isn't called for the `follow` option itself, but can be called during construction when `syncUrl` applies a link. *Since 0.7.0.*
 
 ## Date helpers
 
@@ -532,6 +640,7 @@ With `syncUrl: true`, the state is kept in the URL hash like this:
 | `ck-sel`  | Selected ids, separated by commas. |
 | `ck-hide` | Hidden categories, separated by commas. |
 | `ck-tz`   | Clock scale only: the time zone, `local` or `UTC`. It's always written, so a link opens in the sender's zone even if the page's default differs. An unknown zone is ignored. |
+| `ck-live` | Clock scale only: written instead of `ck-view` while the view is [following now](#following-now), as the view's span in ms, e.g. `ck-live=600000`. The view moves as time passes but the span doesn't, so the URL isn't rewritten all the time. Opening the link follows now at that span. It wins over `ck-view`, and a value that isn't a positive number is ignored. *Since 0.7.0.* |
 
 - The hash is updated with `history.replaceState` shortly after each change, so it doesn't add entries to the browser history.
 - Loading the page doesn't rewrite the URL.
@@ -551,6 +660,7 @@ Set these on `.chroniko`, in a stylesheet loaded after Chroniko's.
 | `--ck-border`    | `#d8dee4` / `#30363d`   | Borders and dividers |
 | `--ck-grid`      | `#eef1f4` / `#1c2128`   | Grid lines behind the events |
 | `--ck-focus`     | `#0969da` / `#4493f8`   | Focus rings and links |
+| `--ck-now`       | `#cf222e` / `#f85149`   | The "now" line on the clock scale, and the **● Live** button while following |
 | `--ck-height`    | `420px`                 | Height of the timeline |
 | `--ck-sticky-top`| `0px`                   | With `storyPosition: 'right'`, how far from the top of the window the timeline sticks, e.g. the height of a fixed header |
 
@@ -562,9 +672,11 @@ Every error is an `Error` whose message starts with `Chroniko:`. Any method that
 
 | Thrown by | When |
 | --------- | ---- |
-| Constructor | The container isn't found; `timeScale` isn't `'historical'` or `'clock'`; `timeZone` or `timeZones` is given with the historical scale; `timeZone` isn't `'local'` or `'UTC'`; `timeZones` isn't an array of two or more of those, or lists one twice; `storyPosition` isn't `'below'` or `'right'`; `split` isn't between 0 and 1; `language` is unknown. |
+| Constructor | The container isn't found; `timeScale` isn't `'historical'` or `'clock'`; `timeZone` or `timeZones` is given with the historical scale; `timeZone` isn't `'local'` or `'UTC'`; `timeZones` isn't an array of two or more of those, or lists one twice; `storyPosition` isn't `'below'` or `'right'`; `split` isn't between 0 and 1; `language` is unknown; `follow` or `retain` is given with the historical scale; `retain` isn't a positive number; `maxEvents` isn't a positive whole number; `source` isn't a function. |
 | `setTimeZone`, `setState` | On the historical scale; the zone isn't `'local'` or `'UTC'`. |
-| Constructor, `setEvents`, `addEvents` | An event isn't an object (e.g. `null`); an event has no `start` or an invalid date; two events share an id. |
+| `follow` | On the historical scale. |
+| `setState` | `following` is given on the historical scale, or isn't `true` or `false`. |
+| Constructor, `setEvents`, `addEvents` | An event isn't an object (e.g. `null`); an event has no `start` or an invalid date; it ends before it starts; `running` isn't `true` or `false`, is `true` on the historical scale, or comes with an `end`; two events share an id. |
 | `updateEvent` | Unknown id; the patch isn't an object; the patch changes the id; the updated event is invalid. |
 | `zoomTo`, `setState` | A date is missing or invalid; `start` isn't before `end`. |
 | `parseDate`, `parseTime` | The input can't be parsed, or the date doesn't exist. |
