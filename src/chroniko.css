@@ -301,6 +301,13 @@
   position: relative;
 }
 
+/* Moved with the lanes while the view pans; see _renderAxis. */
+.ck-axis-inner,
+.ck-grid-inner {
+  position: absolute;
+  inset: 0;
+}
+
 .ck-axis {
   position: absolute;
   left: 0;

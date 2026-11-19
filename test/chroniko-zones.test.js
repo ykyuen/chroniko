@@ -54,7 +54,7 @@ const positions = (timeline) => timeline.items.map((it) => [it.id, it.from, it.t
 // The axis labels, after letting the timeline render.
 function axisLabels(timeline) {
   dom.frame();
-  return [...timeline.axisEl.innerHTML.matchAll(/>([^<]*)<\/span>/g)].map((m) => m[1]);
+  return [...timeline._axisInner.innerHTML.matchAll(/>([^<]*)<\/span>/g)].map((m) => m[1]);
 }
 
 // An event's tooltip, after letting the timeline render.

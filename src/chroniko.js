@@ -752,6 +752,14 @@ export class Chroniko {
     this.lanesEl.append(this._lanesInner);
     this._buttons = new Map(); // event id → its button while on screen; see _renderEvents
     this.axisEl = this.root.querySelector('.ck-axis');
+    // The ticks and gridlines are placed from the lanes' origin and moved
+    // with them; see _renderAxis.
+    this._axisInner = document.createElement('div');
+    this._axisInner.className = 'ck-axis-inner';
+    this.axisEl.append(this._axisInner);
+    this._gridInner = document.createElement('div');
+    this._gridInner.className = 'ck-grid-inner';
+    this.gridEl.append(this._gridInner);
     this.zoneEl = this.root.querySelector('.ck-zone');
     this.nowEl = this.root.querySelector('.ck-now');
     this.storyEl = this.root.querySelector('.ck-story');
@@ -1327,18 +1335,25 @@ export class Chroniko {
   // Label widths come from a canvas rather than the DOM so measuring thousands
   // of titles stays cheap. The font is read from a probe .ck-label, so styles
   // aimed at the label itself (not just .ck-lanes) are picked up too.
+  // Reading it makes the browser restyle the lanes, which is slow with
+  // thousands of events on screen, so it is read only when every label is
+  // measured: by setEvents, when a web font loads, and when the text size
+  // changes. Measuring just a few (addEvents, updateEvent) reuses it.
   _measureLabels(items = this.items) {
     const ctx = (this._ctx ??= document.createElement('canvas').getContext('2d'));
-    const probe = document.createElement('span');
-    probe.className = 'ck-label';
-    probe.style.visibility = 'hidden';
-    this.lanesEl.append(probe);
-    const cs = getComputedStyle(probe);
-    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    ctx.letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
-    ctx.wordSpacing = cs.wordSpacing === 'normal' ? '0px' : cs.wordSpacing;
-    const transform = cs.textTransform;
-    probe.remove();
+    if (items === this.items || this._labelTransform == null) {
+      const probe = document.createElement('span');
+      probe.className = 'ck-label';
+      probe.style.visibility = 'hidden';
+      this.lanesEl.append(probe);
+      const cs = getComputedStyle(probe);
+      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      ctx.letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
+      ctx.wordSpacing = cs.wordSpacing === 'normal' ? '0px' : cs.wordSpacing;
+      this._labelTransform = cs.textTransform;
+      probe.remove();
+    }
+    const transform = this._labelTransform;
     for (const it of items) {
       let title = it.event.title ?? '';
       if (transform === 'uppercase') title = title.toUpperCase();
@@ -1371,11 +1386,10 @@ export class Chroniko {
     const width = this.viewport.clientWidth;
     if (!width) return;
     const scale = width / (this.end - this.start);
-    const x = (v) => (v - this.start) * scale;
     // Panning leaves the scale unchanged up to float noise, so it never repacks.
     const rescaled = this._layoutScale == null || Math.abs(scale / this._layoutScale - 1) > 1e-6;
     if (this._layoutScale == null || (rescaled && !this._zooming)) this._layout(scale);
-    this._renderAxis(scale, x);
+    this._renderAxis(width);
     this._renderEvents(width);
   }
 
@@ -1519,20 +1533,29 @@ export class Chroniko {
     this._scheduleRender();
   }
 
-  _renderAxis(scale, x) {
+  // Ticks and gridlines are placed at lane positions and moved with the
+  // lanes (see _renderEvents), so while the view pans their markup changes
+  // only when a tick enters or leaves the view, not every frame.
+  _renderAxis(width) {
+    const scale = width / (this.end - this.start);
+    const { laneX, shift } = this._laneOrigin(width);
     let ticks = '';
     let lines = '';
     for (const { value, label } of this.scale.ticks(this.start, this.end, scale, MIN_TICK_GAP, this.m)) {
-      const left = x(value).toFixed(1);
+      const left = laneX(value).toFixed(1);
       ticks += `<span class="ck-tick" style="left:${left}px">${esc(label)}</span>`;
       lines += `<span class="ck-gridline" style="left:${left}px"></span>`;
     }
-    this.axisEl.innerHTML = ticks;
-    this.gridEl.innerHTML = lines;
+    writeIfChanged(this, '_axisHtml', ticks, (v) => (this._axisInner.innerHTML = v));
+    writeIfChanged(this, '_gridHtml', lines, (v) => (this._gridInner.innerHTML = v));
+    writeIfChanged(this, '_axisShift', shift ? `translateX(${-shift}px)` : '', (v) => {
+      this._axisInner.style.transform = v;
+      this._gridInner.style.transform = v;
+    });
     // The clock scale names its time zone, so screenshots aren't ambiguous.
     const zone = this.scale.zoneLabel?.(this.start, this.end) ?? '';
     if (this.zoneEl.textContent !== zone) this.zoneEl.textContent = zone;
-    this.zoneEl.hidden = !zone;
+    if (this.zoneEl.hidden !== !zone) this.zoneEl.hidden = !zone;
   }
 
   // Each event on screen keeps one button, found by its id, from render to
@@ -1703,23 +1726,39 @@ export class Chroniko {
     el.focus({ preventScroll: true });
   }
 
+  // The legend and the tag bar are redrawn after every batch of data, which
+  // while events stream in is most frames. They are rewritten only when what
+  // they show changes, so a button isn't replaced under the pointer between
+  // press and release, and the browser isn't made to restyle them each frame.
   _renderLegend() {
-    this.legendEl.innerHTML = this.categories
+    const html = this.categories
       .map(
         (c) => `<button type="button" class="ck-legend-item" data-category="${esc(c)}"
                   aria-pressed="${!this.hidden.has(c)}" style="--ck-color:${esc(this.colorOf.get(c))}">
                   <span class="ck-swatch"></span>${esc(this._categoryLabel(c))}</button>`,
       )
       .join('');
+    writeIfChanged(this, '_legendHtml', html, (v) => (this.legendEl.innerHTML = v));
   }
 
   // Every tag in the events, alphabetically by label, with how many events
-  // have it. Hidden when no event has tags.
+  // have it. Hidden when no event has tags. When only the counts change, as
+  // events come and go, they are updated in place.
   _renderTagbar() {
     const counts = new Map();
     for (const it of this.items) for (const t of it.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
     const tags = [...counts.keys()].sort((a, b) => this._tagLabel(a).localeCompare(this._tagLabel(b), this.options.language));
     this.tagbarEl.hidden = !tags.length;
+    const key = JSON.stringify(tags);
+    if (key === this._tagbarKey) {
+      const spans = this.tagbarEl.querySelectorAll('.ck-tag-count');
+      tags.forEach((t, i) => {
+        const text = String(counts.get(t));
+        if (spans[i] && spans[i].textContent !== text) spans[i].textContent = text;
+      });
+      return;
+    }
+    this._tagbarKey = key;
     this.tagbarEl.querySelector('.ck-count').textContent = tags.length;
     this.tagbarEl.querySelector('.ck-tags').innerHTML = tags
       .map(

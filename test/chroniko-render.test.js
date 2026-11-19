@@ -181,3 +181,87 @@ describe('lane buttons', () => {
     assert.equal(inner.style.height, `${12 * 2 + timeline._laneCount * 30}px`);
   });
 });
+
+// Count writes to an element's innerHTML, keeping what is written.
+function countWrites(el) {
+  let html = el.innerHTML;
+  const counter = { writes: 0 };
+  Object.defineProperty(el, 'innerHTML', {
+    get: () => html,
+    set: (v) => {
+      counter.writes += 1;
+      html = v;
+    },
+  });
+  return counter;
+}
+
+describe('work skipped while events stream in', () => {
+  test('the legend is written only when it changes', () => {
+    const timeline = make();
+    const legend = countWrites(timeline.legendEl);
+    timeline.addEvents({ title: 'Joan of Arc', start: 1429, category: 'war' });
+    dom.frame();
+    assert.equal(legend.writes, 0);
+    timeline.addEvents({ title: 'Magna Carta', start: 1215, category: 'law' });
+    dom.frame();
+    assert.equal(legend.writes, 1);
+    assert.match(timeline.legendEl.innerHTML, /data-category="law"/);
+  });
+
+  test('tag counts are updated in place, and the tag bar is rebuilt only for a new tag', () => {
+    const timeline = make({ events: [{ title: 'A', start: 1340, tags: ['France'] }] });
+    const tags = countWrites(timeline.tagbarEl.querySelector('.ck-tags'));
+    // The stand-in DOM doesn't find elements in markup; hand it the count span.
+    const span = { textContent: '1' };
+    timeline.tagbarEl.querySelectorAll = (selector) => (selector === '.ck-tag-count' ? [span] : []);
+    timeline.addEvents({ title: 'B', start: 1350, tags: ['France'] });
+    dom.frame();
+    assert.equal(tags.writes, 0);
+    assert.equal(span.textContent, '2');
+    timeline.addEvents({ title: 'C', start: 1360, tags: ['England'] });
+    dom.frame();
+    assert.equal(tags.writes, 1);
+    assert.match(timeline.tagbarEl.querySelector('.ck-tags').innerHTML, /England <span class="ck-tag-count">1<\/span>.*France <span class="ck-tag-count">2<\/span>/s);
+  });
+
+  test("the label font is read when every label is measured, not for each added event", () => {
+    const timeline = make({ textSizeToggle: true });
+    let reads = 0;
+    const read = globalThis.getComputedStyle;
+    globalThis.getComputedStyle = (...args) => {
+      reads += 1;
+      return read(...args);
+    };
+    try {
+      timeline.addEvents({ title: 'Joan of Arc', start: 1429 });
+      timeline.updateEvent('plague', { title: 'The Black Death' });
+      assert.equal(reads, 0);
+      assert.equal(timeline.items.find((it) => it.id === 'plague').labelWidth, 'The Black Death'.length * 7);
+      timeline.setEvents(events());
+      assert.equal(reads, 1);
+      timeline.root.querySelector('.ck-controls').fire('click', {
+        target: { closest: () => ({ dataset: { action: 'text-size' }, setAttribute() {} }) },
+      });
+      assert.equal(reads, 2);
+    } finally {
+      globalThis.getComputedStyle = read;
+    }
+  });
+
+  test('the axis and grid move with the lanes, and are rewritten only when the ticks change', () => {
+    // Ticks every 20 years, at 1320 to 1500: the view starts between ticks.
+    const timeline = make({ start: 1305, end: 1505 });
+    const axis = countWrites(timeline._axisInner);
+    const grid = countWrites(timeline._gridInner);
+    timeline.panBy(1);
+    dom.frame();
+    assert.deepEqual([axis.writes, grid.writes], [0, 0]);
+    assert.equal(timeline._axisInner.style.transform, 'translateX(-1px)');
+    assert.equal(timeline._gridInner.style.transform, 'translateX(-1px)');
+    // Panning 100px (20 years) takes 1320 out of view and brings 1520 in.
+    timeline.panBy(100);
+    dom.frame();
+    assert.deepEqual([axis.writes, grid.writes], [1, 1]);
+  });
+});
