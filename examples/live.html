@@ -19,7 +19,7 @@
   <body>
     <main>
       <h1>Chroniko: live activity</h1>
-      <p>A made-up feed of deploys, jobs, errors and alerts, generated in this page. The red line is now, and new events flash as they arrive. Deploys, jobs and some alerts are bars that grow while they run, and stop when they finish. The view follows now while the ● Live button is lit; zooming keeps following, and dragging, the arrow keys or Fit stop it. Press ● Live to go back. Events that ended more than 30 minutes ago are dropped.</p>
+      <p>A made-up feed of deploys, jobs, errors and alerts, streamed from <code>/events</code> on <code>npm start</code>’s server (or made up in this page when that isn’t there). The red line is now, and new events flash as they arrive. Deploys, jobs and some alerts are bars that grow while they run, and stop when they finish. The view follows now while the ● Live button is lit; zooming keeps following, and dragging, the arrow keys or Fit stop it. Press ● Live to go back. Events that ended more than 30 minutes ago are dropped.</p>
       <div class="controls">
         <span>
           <label for="rate">Events per second</label>
@@ -40,86 +40,69 @@
 
     <script type="module">
       import { Chroniko } from '../src/chroniko.js';
+      import { createFeed } from './feed.js';
 
       const SECOND = 1000;
       const MINUTE = 60 * SECOND;
 
-      // ---- A made-up feed ---------------------------------------------------
-      //
-      // Stands in for a server stream until the demo endpoint arrives. It is
-      // the timeline's source: it gets { add, update, remove } and returns a
-      // cleanup that destroy() calls. Uses only add and update: retain and
-      // maxEvents drop old events, and running ones always stay, so closing
-      // one never finds it gone.
-
-      const services = ['api', 'web', 'worker', 'billing', 'search'];
-      const jobs = ['Sync invoices', 'Rebuild search index', 'Send digest emails', 'Rotate logs', 'Refresh cache'];
-      const errors = ['500 on /checkout', 'Timeout calling payments', 'Null pointer in worker', 'Rate limit exceeded', 'DB connection reset'];
-      const alerts = ['p99 latency above 800 ms', 'CPU above 90%', 'Queue depth above 1k', 'Disk 85% full'];
-
-      const pick = (list) => list[Math.floor(Math.random() * list.length)];
-      const between = (min, max) => min + Math.random() * (max - min);
-
       const rateSelect = document.querySelector('#rate');
-      const rate = () => Number(rateSelect.value);
-
-      let api = null; // the source's { add, update, remove } while it runs
-      let count = 0;
-      const open = new Map(); // id → timer, started and not yet finished
+      const pauseButton = document.querySelector('#pause');
       let paused = false;
-      let timer = 0;
+      const rate = () => (paused ? 0 : Number(rateSelect.value));
 
-      // Something that started at `at` and lasts `ms`: a running bar that
-      // grows until it ends. One that has already ended is added as a bar.
-      function ranged(event, at, ms) {
-        const end = at + ms;
-        if (end <= Date.now()) return api.add({ ...event, start: at, end });
-        api.add({ ...event, start: at, running: true });
-        open.set(event.id, setTimeout(() => {
-          open.delete(event.id);
-          api.update(event.id, { end, running: false });
-        }, end - Date.now()));
-      }
+      // ---- Sources ------------------------------------------------------------
+      //
+      // A source gets the timeline's { add, update, remove } and returns a
+      // cleanup, which destroy() calls. Both of these also set `feed`, which
+      // the controls below use: setRate(n), where 0 pauses.
 
-      function emit(at = Date.now()) {
-        const id = `ev-${++count}`;
-        const service = pick(services);
-        const roll = Math.random();
-        if (roll < 0.12) {
-          ranged({ id, title: `Deploy ${service} v${Math.floor(between(1, 4))}.${Math.floor(between(0, 30))}`,
-            category: 'deploy', tags: [service] }, at, between(20, 90) * SECOND);
-        } else if (roll < 0.4) {
-          ranged({ id, title: pick(jobs), category: 'job', tags: [service] }, at, between(5, 60) * SECOND);
-        } else if (roll < 0.8) {
-          api.add({ id, title: pick(errors), start: at, category: 'error', tags: [service] });
-        } else if (roll < 0.9) {
-          ranged({ id, title: pick(alerts), category: 'alert', tags: [service] }, at, between(10, 40) * SECOND);
-        } else {
-          api.add({ id, title: pick(alerts), start: at, category: 'alert', tags: [service] });
-        }
-      }
+      let feed = null;
+      let via = '';
 
-      // New events at random, on average rate() a second.
-      function next() {
-        timer = setTimeout(() => {
-          emit();
-          next();
-        }, -Math.log(Math.random()) / rate() * SECOND);
-      }
-
-      function feed(timelineApi) {
-        api = timelineApi;
-        // The last five minutes, so the page doesn't start empty.
-        for (let at = Date.now() - 5 * MINUTE; at < Date.now(); at += -Math.log(Math.random()) / rate() * SECOND) {
-          emit(at);
-        }
-        if (!paused) next();
-        return () => {
-          clearTimeout(timer);
-          open.forEach((t) => clearTimeout(t));
-          open.clear();
-          api = null;
+      // Server-Sent Events from scripts/serve.js (see its /events). Changing
+      // the rate reconnects with the same client id, which keeps the feed.
+      // If the endpoint isn't there, e.g. on a static host, the page runs
+      // the feed itself.
+      function fromServer(api) {
+        const client = crypto.randomUUID?.() ?? String(Math.random()).slice(2);
+        let source = null;
+        let local = null;
+        let connected = false;
+        const connect = () => {
+          source?.close();
+          source = new EventSource(`/events?client=${client}&rate=${rate()}`);
+          source.addEventListener('open', () => {
+            connected = true;
+            via = 'streamed from /events';
+          });
+          source.addEventListener('add', (e) => api.add(JSON.parse(e.data)));
+          source.addEventListener('update', (e) => {
+            const { id, patch } = JSON.parse(e.data);
+            api.update(id, patch);
+          });
+          // A stream that never opened, and that the browser gave up on.
+          source.addEventListener('error', () => {
+            if (connected || source.readyState !== EventSource.CLOSED) return;
+            source = null;
+            local = inPage(api);
+          });
         };
+        connect();
+        feed = { setRate: () => (local ? local.setRate(rate()) : connect()) };
+        return () => {
+          source?.close();
+          local?.stop();
+        };
+      }
+
+      // The same feed, run in this page.
+      function inPage(api) {
+        via = 'made up in this page';
+        const f = createFeed((op, data) => (op === 'add' ? api.add(data) : api.update(data.id, data.patch)), {
+          rate: rate(),
+        });
+        feed = { setRate: () => f.setRate(rate()) };
+        return f;
       }
 
       const timeline = new Chroniko('#timeline', {
@@ -130,29 +113,26 @@
         follow: true,
         retain: 30 * MINUTE, // events that ended longer ago are dropped
         maxEvents: 2000, // and beyond this many, those that started first
-        source: feed,
+        source: fromServer,
         colors: { deploy: '#4e79a7', job: '#59a14f', error: '#e15759', alert: '#f28e2b' },
         textSizeToggle: true,
       });
       window.timeline = timeline;
 
       rateSelect.addEventListener('change', () => {
-        if (paused || !api) return;
-        clearTimeout(timer);
-        next();
+        if (!paused) feed.setRate();
       });
 
-      const pauseButton = document.querySelector('#pause');
       pauseButton.addEventListener('click', () => {
         paused = !paused;
         pauseButton.textContent = paused ? 'Resume feed' : 'Pause feed';
-        clearTimeout(timer);
-        if (!paused && api) next();
+        feed.setRate();
       });
 
       const stats = document.querySelector('#stats');
       setInterval(() => {
-        stats.textContent = `${timeline.items.length} events, ${open.size} running`;
+        const running = timeline.items.filter((it) => it.running).length;
+        stats.textContent = `${timeline.items.length} events, ${running} running${via ? `, ${via}` : ''}`;
       }, 250);
     </script>
   </body>
