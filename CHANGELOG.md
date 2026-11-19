@@ -4,6 +4,8 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-20
+
 ### Added
 
 - Live mode on the clock scale, for activity feeds of deploys, jobs, incidents or alerts. See the README's "Live mode" section.
@@ -143,7 +145,8 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - Initial release.
 
-[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.6.2...HEAD
+[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.7.0...HEAD
+[0.7.0]: https://github.com/ykyuen/chroniko/compare/0.6.2...0.7.0
 [0.6.2]: https://github.com/ykyuen/chroniko/compare/0.6.1...0.6.2
 [0.6.1]: https://github.com/ykyuen/chroniko/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/ykyuen/chroniko/compare/0.5.0...0.6.0
