@@ -19,7 +19,7 @@
   <body>
     <main>
       <h1>Chroniko: live activity</h1>
-      <p>A made-up feed of deploys, jobs, errors and alerts, generated in this page. The red line is now. Deploys, jobs and some alerts are bars that grow while they run, and stop when they finish. The view follows now while the ● Live button is lit; zooming keeps following, and dragging, the arrow keys or Fit stop it. Press ● Live to go back.</p>
+      <p>A made-up feed of deploys, jobs, errors and alerts, generated in this page. The red line is now. Deploys, jobs and some alerts are bars that grow while they run, and stop when they finish. The view follows now while the ● Live button is lit; zooming keeps following, and dragging, the arrow keys or Fit stop it. Press ● Live to go back. Events that ended more than 30 minutes ago are dropped.</p>
       <div class="controls">
         <span>
           <label for="rate">Events per second</label>
@@ -43,7 +43,6 @@
 
       const SECOND = 1000;
       const MINUTE = 60 * SECOND;
-      const MAX_EVENTS = 2000; // the oldest events are removed beyond this
 
       const timeline = new Chroniko('#timeline', {
         timeScale: 'clock',
@@ -51,6 +50,8 @@
         start: Date.now() - 5 * MINUTE,
         end: Date.now(),
         follow: true,
+        retain: 30 * MINUTE, // events that ended longer ago are dropped
+        maxEvents: 2000, // and beyond this many, those that started first
         colors: { deploy: '#4e79a7', job: '#59a14f', error: '#e15759', alert: '#f28e2b' },
         textSizeToggle: true,
       });
@@ -59,7 +60,9 @@
       // ---- A made-up feed ---------------------------------------------------
       //
       // Stands in for a server stream until the source option and the demo
-      // endpoint arrive. Uses only addEvents, updateEvent and removeEvents.
+      // endpoint arrive. Uses only addEvents and updateEvent: retain and
+      // maxEvents drop old events, and running ones always stay, so closing
+      // one never finds it gone.
 
       const services = ['api', 'web', 'worker', 'billing', 'search'];
       const jobs = ['Sync invoices', 'Rebuild search index', 'Send digest emails', 'Rotate logs', 'Refresh cache'];
@@ -70,18 +73,8 @@
       const between = (min, max) => min + Math.random() * (max - min);
 
       let count = 0;
-      const order = []; // ids, oldest first
       const open = new Set(); // started and not yet finished
-
-      function add(event) {
-        timeline.addEvents(event);
-        order.push(event.id);
-        if (order.length > MAX_EVENTS) {
-          const gone = order.splice(0, order.length - MAX_EVENTS);
-          gone.forEach((id) => open.delete(id));
-          timeline.removeEvents(gone);
-        }
-      }
+      const add = (event) => timeline.addEvents(event);
 
       // Something that started at `at` and lasts `ms`: a running bar that
       // grows until it ends. One that has already ended is added as a bar.
@@ -91,7 +84,7 @@
         add({ ...event, start: at, running: true });
         open.add(event.id);
         setTimeout(() => {
-          if (!open.delete(event.id)) return; // removed in the meantime
+          open.delete(event.id);
           timeline.updateEvent(event.id, { end, running: false });
         }, end - Date.now());
       }
@@ -148,7 +141,6 @@
         clearTimeout(timer);
         if (!paused) next();
       });
-
 
       const stats = document.querySelector('#stats');
       setInterval(() => {

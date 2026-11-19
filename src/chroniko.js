@@ -38,6 +38,7 @@ const NOW_STEP_PX = 0.5; // px the "now" line may fall behind before it is moved
 const NOW_MAX_WAIT = 60_000; // ms between checks of the "now" line, at most
 const FOLLOW_MARGIN = 0.05; // share of the view kept after now while following
 const RUNNING_TEXT_MS = 1000; // ms between updates of "running for …" text
+const MAX_TIMEOUT = 2 ** 31 - 1; // ms, the longest wait setTimeout allows
 
 // The UI text for a language: the built-in locale over English (so a key it
 // lacks still has text), then the caller's overrides, plus the language's
@@ -158,6 +159,10 @@ export class Chroniko {
    *                                    keeps now near the view's right edge as time passes. Panning stops it;
    *                                    zooming doesn't. Either value adds a Live toolbar button that toggles it.
    * @param {Function} [options.onFollowChange] Called with true or false when following starts or stops.
+   * @param {number} [options.retain]   Clock scale only: drop events that ended (or, points, happened) more
+   *                                    than this many ms ago. Running events stay.
+   * @param {number} [options.maxEvents] Keep at most this many events, dropping those that start first.
+   *                                    Running events stay, even beyond it.
    * @param {*}      [options.start]    Initial visible range start (any date the time scale reads).
    * @param {*}      [options.end]      Initial visible range end. Fits all events when omitted.
    * @param {object} [options.colors]   Category → color, e.g. { war: '#c0392b' }.
@@ -199,8 +204,17 @@ export class Chroniko {
         throw new Error(`Chroniko: ${key} needs timeScale: 'clock'; historical dates have no time of day`);
       }
     }
-    if (timeScale === 'historical' && this.options.follow != null) {
-      throw new Error("Chroniko: follow needs timeScale: 'clock'");
+    for (const key of ['follow', 'retain']) {
+      if (timeScale === 'historical' && this.options[key] != null) {
+        throw new Error(`Chroniko: ${key} needs timeScale: 'clock'`);
+      }
+    }
+    const { retain, maxEvents } = this.options;
+    if (retain != null && !(typeof retain === 'number' && retain > 0 && retain < Infinity)) {
+      throw new Error(`Chroniko: retain must be a positive number of ms, got ${JSON.stringify(retain)}`);
+    }
+    if (maxEvents != null && !(Number.isInteger(maxEvents) && maxEvents > 0)) {
+      throw new Error(`Chroniko: maxEvents must be a positive whole number, got ${JSON.stringify(maxEvents)}`);
     }
     if (timeZones != null) {
       if (!Array.isArray(timeZones) || timeZones.length < 2) {
@@ -274,12 +288,14 @@ export class Chroniko {
       this._stateChanged();
       this.options.onSelectionChange?.(this.getSelection());
     }
+    this._evict();
   }
 
   /**
    * Add one event or an array of events, keeping everything already shown.
    * An event without an id gets one as if it were appended to the events
-   * array, so existing ids never change. Returns the added events' ids.
+   * array, so existing ids never change. Returns the added events' ids,
+   * including any that retain or maxEvents dropped straight away.
    */
   addEvents(events) {
     events = [events].flat();
@@ -301,6 +317,7 @@ export class Chroniko {
     if (appended && this._layoutScale != null) this._pack(added);
     else this._layoutScale = null;
     this._dataChanged(false);
+    this._evict();
     return added.map((it) => it.id);
   }
 
@@ -337,14 +354,64 @@ export class Chroniko {
   /** Remove one event or an array of events by id. Unknown ids are ignored. */
   removeEvents(ids) {
     const gone = new Set([ids].flat().map(String));
-    const items = this.items.filter((it) => !gone.has(it.id));
+    this._keepItems((it) => !gone.has(it.id), true);
+  }
+
+  // Keep only the events for which keep(item) is true. Selected events that
+  // go leave the selection, calling onSelectionChange. With repack, the lanes
+  // are packed again; without, the rest keep their lanes, and the lane count
+  // shrinks on the next full packing.
+  _keepItems(keep, repack) {
+    const items = this.items.filter(keep);
     if (items.length === this.items.length) return;
     this.items = items;
     this._itemsChanged();
-    this._layoutScale = null;
+    if (repack) this._layoutScale = null;
     this._dataChanged(false);
-    const selected = [...this.selected].filter((id) => !gone.has(id));
+    const ids = new Set(items.map((it) => it.id));
+    const selected = [...this.selected].filter((id) => ids.has(id));
     if (selected.length < this.selected.size) this._setSelection(selected);
+  }
+
+  // Retention: drop the events that ended (a point: happened) more than
+  // retain ms ago, then those starting first beyond maxEvents. Running
+  // events haven't ended, and always stay. Called after events are set or
+  // added, and by a timer when the next event is due to expire; see
+  // _scheduleEviction. Eviction doesn't repack the lanes, so a stream of
+  // events isn't repacked at every arrival.
+  _evict() {
+    const { retain, maxEvents } = this.options;
+    if (retain == null && maxEvents == null) return;
+    const now = Date.now();
+    const expired = (it) => retain != null && !it.running && (it.to ?? it.from) + retain <= now;
+    let excess = (maxEvents == null ? 0 : this.items.filter((it) => !expired(it)).length - maxEvents);
+    this._keepItems((it) => {
+      if (expired(it)) return false;
+      if (excess > 0 && !it.running) {
+        excess -= 1;
+        return false;
+      }
+      return true;
+    }, false);
+  }
+
+  // Time the next retain eviction for when the first event expires. Set
+  // again whenever the events change.
+  _scheduleEviction() {
+    clearTimeout(this._evictTimer);
+    this._evictTimer = 0;
+    const { retain } = this.options;
+    if (retain == null) return;
+    let first = Infinity;
+    for (const it of this.items) if (!it.running) first = Math.min(first, it.to ?? it.from);
+    if (first === Infinity) return;
+    const wait = Math.min(Math.max(0, first + retain - Date.now()), MAX_TIMEOUT);
+    this._evictTimer = setTimeout(() => {
+      this._evictTimer = 0;
+      this._evict();
+      // Nothing may have expired yet, after a wait capped at MAX_TIMEOUT.
+      if (!this._evictTimer) this._scheduleEviction();
+    }, wait);
   }
 
   /**
@@ -558,6 +625,7 @@ export class Chroniko {
     clearTimeout(this._hintTimer);
     clearTimeout(this._hashTimer);
     clearTimeout(this._runningTimer);
+    clearTimeout(this._evictTimer);
     if (this._onHashChange) window.removeEventListener('hashchange', this._onHashChange);
     this._resizeObserver.disconnect();
     document.fonts?.removeEventListener('loadingdone', this._onFontsLoaded);
@@ -1149,6 +1217,7 @@ export class Chroniko {
     this._dataSpan = max - min;
     this._running = this.items.filter((it) => it.running);
     this._syncRunningText();
+    this._scheduleEviction();
   }
 
   // addEvents, updateEvent and removeEvents redraw the legend, tag bar and
