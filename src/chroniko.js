@@ -617,6 +617,7 @@ export class Chroniko {
     this.liveEl?.setAttribute('aria-pressed', on);
     // Starting moves the view to now; stopping leaves it where it is.
     if (on) this._scheduleRender();
+    this._stateChanged();
     this.options.onFollowChange?.(on);
   }
 
@@ -636,18 +637,27 @@ export class Chroniko {
       end: this.end,
       selected: this.items.filter((it) => this.selected.has(it.id)).map((it) => it.id),
       hidden: [...this.hidden],
-      ...(this.scale.zone && { timeZone: this.scale.zone.name }),
+      ...(this.scale.zone && { timeZone: this.scale.zone.name, following: this._following }),
     };
   }
 
   /**
    * Restore a state from getState(). Every field is optional, so a partial
-   * state changes only what it names. Unknown event ids are ignored.
+   * state changes only what it names. Unknown event ids are ignored. A view
+   * (start and end) stops following, unless following is true: then the
+   * view's span is followed.
    */
   setState(state = {}) {
     // Everything is read before anything is applied, so a state that throws
     // leaves the timeline as it was. String dates are read in the state's
     // own time zone when it has one.
+    const { following } = state;
+    if (following != null) {
+      if (!this.nowEl) throw new Error("Chroniko: setState following needs timeScale: 'clock'");
+      if (typeof following !== 'boolean') {
+        throw new Error(`Chroniko: setState following must be true or false, got ${JSON.stringify(following)}`);
+      }
+    }
     const zone = state.timeZone != null ? this._zoneFor(state.timeZone, 'setState timeZone') : null;
     const range =
       state.start != null && state.end != null
@@ -657,6 +667,7 @@ export class Chroniko {
     const ids = state.selected ? new Set(state.selected.map(String)) : null;
     if (zone) this._setZone(zone);
     if (range) this._showRange(range);
+    if (following != null) this._setFollowing(following);
     if (hidden) this._setHidden(hidden);
     if (ids) this._setSelection(this.items.filter((it) => ids.has(it.id)).map((it) => it.id));
   }
@@ -1092,7 +1103,8 @@ export class Chroniko {
   // The hash holds ck-view=<start>,<end>, ck-sel=<ids> and ck-hide=<categories>,
   // each list item URI-encoded, e.g. #ck-view=1300,1500&ck-sel=hyw,black-death.
   // The clock scale adds ck-tz=<zone>, always, so a shared link opens in the
-  // sender's zone even where the page's own default differs.
+  // sender's zone even where the page's own default differs. While following
+  // now, ck-live=<span in ms> takes the place of ck-view.
   // Other hash parameters are kept as they are.
 
   _stateChanged() {
@@ -1115,6 +1127,12 @@ export class Chroniko {
     const state = {};
     const view = params.get('ck-view')?.split(',').map(Number);
     if (view?.length === 2 && view.every(Number.isFinite) && view[0] < view[1]) [state.start, state.end] = view;
+    // ck-live=<span> follows now at that span, and wins over ck-view.
+    const live = Number(params.get('ck-live'));
+    if (this.nowEl && params.has('ck-live') && live > 0 && live < Infinity) {
+      const now = Date.now();
+      Object.assign(state, { start: now - live, end: now, following: true });
+    }
     if (params.has('ck-sel')) state.selected = list('ck-sel');
     if (params.has('ck-hide')) state.hidden = list('ck-hide');
     // A zone this version doesn't know (e.g. from a newer one) is ignored.
@@ -1130,11 +1148,19 @@ export class Chroniko {
   }
 
   _writeHash() {
-    const { start, end, selected, hidden, timeZone } = this.getState();
+    const { start, end, selected, hidden, timeZone, following } = this.getState();
     const params = hashParams();
-    // Enough decimals to keep the view to about a thousandth of its span.
-    const digits = Math.min(6, Math.max(0, Math.ceil(3 - Math.log10(end - start))));
-    params.set('ck-view', `${+start.toFixed(digits)},${+end.toFixed(digits)}`);
+    // While following, the view moves every frame; the hash keeps only its
+    // span (zoom), as ck-live, so it isn't rewritten as time passes.
+    if (following) {
+      params.delete('ck-view');
+      params.set('ck-live', String(Math.round(end - start)));
+    } else {
+      // Enough decimals to keep the view to about a thousandth of its span.
+      const digits = Math.min(6, Math.max(0, Math.ceil(3 - Math.log10(end - start))));
+      params.delete('ck-live');
+      params.set('ck-view', `${+start.toFixed(digits)},${+end.toFixed(digits)}`);
+    }
     if (timeZone) params.set('ck-tz', encodeURIComponent(timeZone));
     for (const [key, values] of [['ck-sel', selected], ['ck-hide', hidden]]) {
       if (values.length) params.set(key, values.map(encodeURIComponent).join(','));

@@ -397,6 +397,7 @@ describe('the URL hash', () => {
       selected: ['deploy'],
       hidden: [],
       timeZone: 'UTC',
+      following: false,
     });
     assert.equal(timeline.zoneToggleEl.textContent, 'UTC');
     // Called during construction, like onSelectionChange.

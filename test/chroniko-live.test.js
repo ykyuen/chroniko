@@ -621,3 +621,144 @@ describe('running events', () => {
     assert.equal(button(custom, 'job').title, 'Job · 17 Nov 2026, 09:45:00 (15 minutes so far)');
   });
 });
+
+// A parameter of the URL hash, or null.
+const param = (k) => new URLSearchParams(dom.location.hash.slice(1)).get(k);
+
+describe('following in the URL hash', () => {
+  test('stores the span as ck-live instead of ck-view', () => {
+    // Opening the page writes nothing; following does.
+    const timeline = following({ syncUrl: true, follow: false });
+    timeline.follow();
+    mock.timers.tick(250);
+    assert.equal(param('ck-live'), String(10 * MINUTE));
+    assert.equal(param('ck-view'), null);
+  });
+
+  test('is not rewritten as time passes', () => {
+    const timeline = following({ syncUrl: true });
+    timeline.zoomBy(0.5);
+    dom.frame();
+    mock.timers.tick(250);
+    const hash = dom.location.hash;
+    assert.equal(param('ck-live'), String(5 * MINUTE));
+    wait(MINUTE);
+    mock.timers.tick(250);
+    assert.equal(dom.location.hash, hash);
+  });
+
+  test('goes back to ck-view when following stops, and to ck-live when it starts', () => {
+    const timeline = following({ syncUrl: true });
+    timeline.panBy(-100);
+    mock.timers.tick(250);
+    assert.equal(param('ck-live'), null);
+    assert.equal(param('ck-view'), `${timeline.start},${timeline.end}`);
+    clickLive(timeline);
+    mock.timers.tick(250);
+    assert.equal(param('ck-live'), String(10 * MINUTE));
+    assert.equal(param('ck-view'), null);
+  });
+
+  test('a ck-live link opens following now at that span', () => {
+    dom.location.hash = `#ck-live=${5 * MINUTE}&ck-tz=UTC`;
+    const timeline = clock(NOW - 2 * HOUR, NOW - HOUR, { syncUrl: true });
+    assert.equal(timeline.isFollowing(), true);
+    assert.deepEqual(viewOf(timeline), [NOW - 4.75 * MINUTE, NOW + 0.25 * MINUTE]);
+    // Opening the page doesn't rewrite its URL.
+    mock.timers.tick(250);
+    assert.equal(dom.location.hash, `#ck-live=${5 * MINUTE}&ck-tz=UTC`);
+  });
+
+  test('ck-live wins over ck-view', () => {
+    dom.location.hash = `#ck-view=${NOW - 2 * HOUR},${NOW - HOUR}&ck-live=${5 * MINUTE}`;
+    const timeline = clock(NOW - 2 * HOUR, NOW - HOUR, { syncUrl: true });
+    assert.equal(timeline.isFollowing(), true);
+    assert.equal(spanOf(timeline), 5 * MINUTE);
+  });
+
+  test('a ck-view link stops a page that follows by default', () => {
+    dom.location.hash = `#ck-view=${NOW - 2 * HOUR},${NOW - HOUR}`;
+    const timeline = following({ syncUrl: true });
+    assert.equal(timeline.isFollowing(), false);
+    assert.deepEqual(viewOf(timeline), [NOW - 2 * HOUR, NOW - HOUR]);
+  });
+
+  test('a ck-live it cannot read is ignored', () => {
+    for (const live of ['0', '-5', 'abc', '', 'Infinity']) {
+      dom.location.hash = `#ck-view=${NOW - 2 * HOUR},${NOW - HOUR}&ck-live=${live}`;
+      const timeline = clock(NOW - 3 * HOUR, NOW, { syncUrl: true });
+      assert.equal(timeline.isFollowing(), false, live);
+      assert.deepEqual(viewOf(timeline), [NOW - 2 * HOUR, NOW - HOUR], live);
+      timeline.destroy();
+    }
+  });
+
+  test('the historical scale ignores ck-live', () => {
+    dom.location.hash = '#ck-live=300000';
+    const timeline = new Chroniko(dom.container, {
+      events: [{ title: 'Black Death', start: 1347, end: 1351 }],
+      start: 1300,
+      end: 1400,
+      syncUrl: true,
+    });
+    assert.deepEqual(viewOf(timeline), [1300, 1400]);
+    assert.equal(timeline.getState().following, undefined);
+  });
+});
+
+describe('following in getState and setState', () => {
+  test('getState says whether the view is following', () => {
+    const timeline = following();
+    assert.equal(timeline.getState().following, true);
+    timeline.follow(false);
+    assert.equal(timeline.getState().following, false);
+  });
+
+  test('setState following: true follows at the current span, false stops', () => {
+    const timeline = following({ follow: false });
+    timeline.setState({ following: true });
+    dom.frame();
+    assert.equal(timeline.isFollowing(), true);
+    assert.deepEqual(viewOf(timeline), [NOW - 9.5 * MINUTE, NOW + 0.5 * MINUTE]);
+    timeline.setState({ following: false });
+    assert.equal(timeline.isFollowing(), false);
+    assert.deepEqual(timeline.calls, [true, false]);
+  });
+
+  test("with a view and following: true, follows at the view's span", () => {
+    const timeline = following({ follow: false });
+    timeline.setState({ start: NOW - 2 * HOUR, end: NOW - HOUR, following: true });
+    dom.frame();
+    assert.equal(timeline.isFollowing(), true);
+    assert.deepEqual(viewOf(timeline), [NOW - 57 * MINUTE, NOW + 3 * MINUTE]);
+  });
+
+  test('a view without following stops following, as before', () => {
+    const timeline = following();
+    timeline.setState({ start: NOW - 2 * HOUR, end: NOW - HOUR });
+    assert.equal(timeline.isFollowing(), false);
+  });
+
+  test('a getState() result restores following', () => {
+    const timeline = following();
+    const state = timeline.getState();
+    timeline.panBy(-100);
+    timeline.setState(state);
+    assert.equal(timeline.isFollowing(), true);
+  });
+
+  test('following must be true or false, and checked before anything changes', () => {
+    const timeline = following({ follow: false });
+    assert.throws(() => timeline.setState({ start: NOW - 2 * HOUR, end: NOW - HOUR, following: 'yes' }), {
+      message: 'Chroniko: setState following must be true or false, got "yes"',
+    });
+    assert.deepEqual(viewOf(timeline), [NOW - 20 * MINUTE, NOW - 10 * MINUTE]);
+  });
+
+  test('following needs the clock scale', () => {
+    const timeline = new Chroniko(dom.container, { events: [{ title: 'Black Death', start: 1347 }] });
+    assert.throws(() => timeline.setState({ following: false }), {
+      message: "Chroniko: setState following needs timeScale: 'clock'",
+    });
+  });
+});
