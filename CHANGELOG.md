@@ -4,10 +4,13 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-20
+
 ### Changed
 
 - Faster live timelines. With 5,000 events in view, 20 new a second and the view following now, frames take about 17 ms (60 fps) in headless Chromium, down from about 83 ms. Panning, and following, moves the lanes, axis and grid with one transform instead of moving every event; tooltips, the legend, the tag bar and the label font are only worked out again when they change.
 - `updateEvent` keeps every event in its row when the event keeps its start and takes no more room than before, as when a running event is closed. Before, every update rearranged the rows.
+- The README's "Live mode" section has a "Performance" part with these measurements.
 
 ### Fixed
 
@@ -154,7 +157,8 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - Initial release.
 
-[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.7.0...HEAD
+[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.7.1...HEAD
+[0.7.1]: https://github.com/ykyuen/chroniko/compare/0.7.0...0.7.1
 [0.7.0]: https://github.com/ykyuen/chroniko/compare/0.6.2...0.7.0
 [0.6.2]: https://github.com/ykyuen/chroniko/compare/0.6.1...0.6.2
 [0.6.1]: https://github.com/ykyuen/chroniko/compare/0.6.0...0.6.1
