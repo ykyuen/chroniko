@@ -39,6 +39,7 @@ const NOW_MAX_WAIT = 60_000; // ms between checks of the "now" line, at most
 const FOLLOW_MARGIN = 0.05; // share of the view kept after now while following
 const RUNNING_TEXT_MS = 1000; // ms between updates of "running for …" text
 const MAX_TIMEOUT = 2 ** 31 - 1; // ms, the longest wait setTimeout allows
+const ORIGIN_DRIFT_PX = 50_000; // px the view may move from the lanes' origin before it is reset
 
 // The UI text for a language: the built-in locale over English (so a key it
 // lacks still has text), then the caller's overrides, plus the language's
@@ -1375,7 +1376,7 @@ export class Chroniko {
     const rescaled = this._layoutScale == null || Math.abs(scale / this._layoutScale - 1) > 1e-6;
     if (this._layoutScale == null || (rescaled && !this._zooming)) this._layout(scale);
     this._renderAxis(scale, x);
-    this._renderEvents(width, x);
+    this._renderEvents(width);
   }
 
   // ---- Live loop ------------------------------------------------------------
@@ -1402,10 +1403,7 @@ export class Chroniko {
       this._runTo(now);
       if (this._following && this._followTo(now)) this._draw();
       // Running bars that may be in view grow to now; nothing else moved.
-      else if (width && this._running.length && now >= this.start) {
-        const scale = width / (this.end - this.start);
-        this._renderEvents(width, (v) => (v - this.start) * scale);
-      }
+      else if (width && this._running.length && now >= this.start) this._renderEvents(width);
     }
     if (!width) return;
     const scale = width / (this.end - this.start);
@@ -1543,24 +1541,34 @@ export class Chroniko {
   // under the pointer between press and release, so a click, a tooltip or a
   // hover never landed. Buttons come and go as events enter and leave the
   // view, and stay in the events' order, which is the Tab order.
-  _renderEvents(width, x) {
+  //
+  // Two coordinate systems: buttons sit at lane positions, measured from an
+  // origin (see _laneOrigin), and the lanes container is moved left by the
+  // shift, how far the view has moved from that origin. So a position on
+  // screen is its lane position minus the shift. Panning, and following,
+  // which pans every frame, only changes the container's transform, and
+  // leaves the buttons' styles and layout alone. Anything drawn in the lanes
+  // must use lane positions.
+  _renderEvents(width) {
     const rev = this._revealing;
     const now = performance.now();
     const inner = this._lanesInner;
     const shown = [];
+    const { laneX, shift } = this._laneOrigin(width);
     for (const it of this.items) {
       if (it.lane < 0) continue;
       const isRange = it.to != null;
-      const x1 = x(it.from);
-      const x2 = isRange ? x(it.to) : x1;
+      const x1 = laneX(it.from);
+      const x2 = isRange ? laneX(it.to) : x1;
       const left = isRange ? x1 : x1 - DOT / 2;
-      // Range labels stick to the left edge while the bar is partly off-screen,
-      // but never slide past the space the lane packing reserved for them.
+      // Range labels stick to the view's left edge while the bar is partly
+      // off-screen, but never slide past the space the lane packing reserved
+      // for them.
       const labelOffset = isRange
-        ? Math.min(Math.max(0, -x1), Math.max(0, x2 - x1 - it.labelWidth - LABEL_PAD)) + LABEL_PAD
+        ? Math.min(Math.max(0, shift - x1), Math.max(0, x2 - x1 - it.labelWidth - LABEL_PAD)) + LABEL_PAD
         : DOT + LABEL_PAD;
       const right = Math.max(x2, left + labelOffset + it.labelWidth);
-      if ((isRange ? x2 : right) < 0 || left > width) continue;
+      if ((isRange ? x2 : right) < shift || left > shift + width) continue;
 
       const b = this._buttons.get(it.id) ?? this._newButton(it.id);
       b.seen = true;
@@ -1592,7 +1600,16 @@ export class Chroniko {
 
       const title = it.event.title ?? '';
       writeIfChanged(b, 'text', title, () => (label.textContent = title));
-      writeIfChanged(b, 'tooltip', this._tooltip(it), (v) => (el.title = v));
+      // Formatting the dates on every frame for every button would cost more
+      // than the rest of the loop, so a tooltip is written again only for a
+      // changed event (updateEvent makes a new item) or a new time zone (a
+      // new scale). A running event's text changes as time passes; the
+      // running-text timer keeps it current.
+      if (b.tooltipItem !== it || b.tooltipScale !== this.scale) {
+        b.tooltipItem = it;
+        b.tooltipScale = this.scale;
+        writeIfChanged(b, 'tooltip', this._tooltip(it), (v) => (el.title = v));
+      }
       writeIfChanged(b, 'color', it.color, () => el.style.setProperty('--ck-color', it.color));
       writeIfChanged(b, 'left', `${left.toFixed(1)}px`, (v) => (el.style.left = v));
       writeIfChanged(b, 'top', `${LANE_TOP + it.lane * LANE_HEIGHT}px`, (v) => (el.style.top = v));
@@ -1629,7 +1646,34 @@ export class Chroniko {
       prev = el;
     }
     writeIfChanged(this, '_lanesHeight', `${LANE_TOP * 2 + this._laneCount * LANE_HEIGHT}px`, (v) => (inner.style.height = v));
+    writeIfChanged(this, '_lanesShift', shift ? `translateX(${-shift}px)` : '', (v) => (inner.style.transform = v));
     if (rev?.pending) this._finishReveal(rev);
+  }
+
+  // The lanes' origin for a view `width` px wide: laneX(value) is a value's
+  // lane position, and shift how far the view's left edge is from the
+  // origin, both in px (see _renderEvents). The origin is the view's start
+  // when it is set, and is set again when the scale changes (a zoom or a
+  // resize, which move every button anyway) or once the view has moved
+  // ORIGIN_DRIFT_PX from it, which keeps lane positions small. The shift is
+  // rounded to device pixels, so labels stay sharp.
+  _laneOrigin(width) {
+    const scale = width / (this.end - this.start);
+    if (
+      this._origin == null ||
+      Math.abs(scale / this._originScale - 1) > 1e-6 ||
+      Math.abs((this.start - this._origin) * this._originScale) > ORIGIN_DRIFT_PX
+    ) {
+      this._origin = this.start;
+      this._originScale = scale;
+    }
+    const origin = this._origin;
+    const k = this._originScale;
+    const dpr = window.devicePixelRatio || 1;
+    return {
+      laneX: (value) => (value - origin) * k,
+      shift: Math.round((this.start - origin) * k * dpr) / dpr,
+    };
   }
 
   _newButton(id) {

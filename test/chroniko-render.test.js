@@ -29,6 +29,10 @@ function make(options = {}) {
 const buttons = (timeline) => timeline.lanesEl.querySelectorAll('.ck-event');
 const button = (timeline, id) => buttons(timeline).find((b) => b.dataset.id === id);
 const order = (timeline) => buttons(timeline).map((b) => b.dataset.id);
+// How far the lanes are moved left: buttons sit at lane positions, and the
+// lanes container is moved by this shift, so on screen x = lane x - shift.
+const shiftOf = (timeline) => 0 - Number(/translateX\(([-\d.]+)px\)/.exec(timeline._lanesInner.style.transform)?.[1] ?? 0);
+const onScreen = (timeline, el) => `${(parseFloat(el.style.left) - shiftOf(timeline)).toFixed(1)}px`;
 
 describe('lane buttons', () => {
   test('one per event on screen, in the events’ order', () => {
@@ -51,7 +55,46 @@ describe('lane buttons', () => {
       dom.frame();
     }
     assert.deepEqual(buttons(timeline), before);
-    assert.equal(button(timeline, 'plague').style.left, '225.0px');
+    // The buttons keep their lane positions; only the lanes move, by 10px.
+    assert.equal(button(timeline, 'plague').style.left, '235.0px');
+    assert.equal(shiftOf(timeline), 10);
+    assert.equal(onScreen(timeline, button(timeline, 'plague')), '225.0px');
+  });
+
+  test("keep a bar's label at the view's left edge while the bar starts before it", () => {
+    const timeline = make();
+    timeline.panBy(300); // the view is [1360, 1560]
+    dom.frame();
+    const hyw = button(timeline, 'hyw');
+    const label = hyw.childNodes[0];
+    // The bar starts at lane x 185 (1337), 300px left of the view's edge is
+    // at 300; its label sits LABEL_PAD (6px) inside the edge.
+    assert.equal(hyw.style.left, '185.0px');
+    assert.equal(label.style.left, '121.0px');
+    assert.equal(parseFloat(onScreen(timeline, hyw)) + parseFloat(label.style.left), 6);
+  });
+
+  test('are placed again from a new origin after a zoom', () => {
+    const timeline = make();
+    timeline.panBy(100);
+    dom.frame();
+    timeline.zoomBy(0.5, 0);
+    dom.frame();
+    // The view is [1320, 1420]: 10px a year, the origin at its start.
+    assert.equal(shiftOf(timeline), 0);
+    assert.equal(button(timeline, 'plague').style.left, '270.0px');
+  });
+
+  test('are placed again from a new origin once the view has moved far', () => {
+    const timeline = make({ events: [...events(), { id: 'late', title: 'Late', start: 2400 }], maxSpan: 5000 });
+    timeline.panBy(4000);
+    dom.frame();
+    assert.equal(shiftOf(timeline), 4000);
+    timeline.panBy(50_000);
+    dom.frame();
+    // 54,000px from the first origin: past ORIGIN_DRIFT_PX, so it starts again.
+    assert.equal(shiftOf(timeline), 0);
+    assert.deepEqual([timeline.start, timeline.end], [1300 + 54_000 / 5, 1500 + 54_000 / 5]);
   });
 
   test('stay the same elements when events are added, updated or selected', () => {

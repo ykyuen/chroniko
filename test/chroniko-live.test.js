@@ -436,6 +436,10 @@ function running(events, start = NOW - 30 * MINUTE, end = NOW + 30 * MINUTE, opt
 }
 const button = (timeline, id) => timeline._buttons.get(id).el;
 const laneOf = (timeline, id) => timeline.items.find((it) => it.id === id).lane;
+// How far the lanes are moved left: buttons sit at lane positions, and the
+// lanes container is moved by this shift, so on screen x = lane x - shift.
+const shiftOf = (timeline) => 0 - Number(/translateX\(([-\d.]+)px\)/.exec(timeline._lanesInner.style.transform)?.[1] ?? 0);
+const onScreen = (timeline, el) => `${(parseFloat(el.style.left) - shiftOf(timeline)).toFixed(1)}px`;
 const job = (fields = {}) => ({ id: 'job', title: 'Job', start: '2026-11-17T09:45:00Z', running: true, ...fields });
 
 describe('running events', () => {
@@ -463,7 +467,7 @@ describe('running events', () => {
     wait(MINUTE);
     const el = button(timeline, 'job');
     // The view is [now - 9.5 min, now + 0.5 min]; the bar starts before it.
-    assert.equal(el.style.left, `${((NOW - 15 * MINUTE - (NOW + MINUTE - 9.5 * MINUTE)) / (10 * MINUTE) * 1000).toFixed(1)}px`);
+    assert.equal(onScreen(timeline, el), `${((NOW - 15 * MINUTE - (NOW + MINUTE - 9.5 * MINUTE)) / (10 * MINUTE) * 1000).toFixed(1)}px`);
     assert.equal(el.style.width, `${(16 * MINUTE / (10 * MINUTE) * 1000).toFixed(1)}px`);
   });
 
