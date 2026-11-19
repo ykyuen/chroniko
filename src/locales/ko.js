@@ -24,6 +24,7 @@ export default {
   remove: (title) => `선택에서 ${title} 제거`,
   endOf: (title) => `${title} 종료`,
   lasted: (duration) => `기간: ${duration}`,
+  runningFor: (date, duration) => `${date} – 진행 중(${duration})`,
   endsAria: (title, date, duration) => `${title} 종료: ${date}${duration ? `, 기간 ${duration}` : ''}. 사건으로 이동`,
 
   months: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'],

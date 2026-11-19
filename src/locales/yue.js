@@ -25,6 +25,7 @@ export default {
   remove: (title) => `移走「${title}」`,
   endOf: (title) => `${title}完結`,
   lasted: (duration) => `維持咗${duration}`,
+  runningFor: (date, duration) => `${date}・進行緊，已經${duration}`,
   endsAria: (title, date, duration) => `${title}喺${date}完結${duration ? `，維持咗${duration}` : ''}。去返個事件`,
 
   months: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],

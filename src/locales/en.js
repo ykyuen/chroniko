@@ -39,6 +39,9 @@ export default {
   remove: (title) => `Remove ${title} from selection`,
   endOf: (title) => `End of ${title}`,
   lasted: (duration) => `lasted ${duration}`,
+  // A running event's date in its tooltip and story card: when it started
+  // and how long it has run so far.
+  runningFor: (date, duration) => `${date} – running for ${duration}`,
   endsAria: (title, date, duration) => `${title} ends ${date}${duration ? `, after ${duration}` : ''}. Go to event`,
 
   // Dates. year() gets a whole year, negative for BCE; month() and day() get

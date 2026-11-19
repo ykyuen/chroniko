@@ -26,6 +26,7 @@ export default {
   remove: (title) => `Retirer ${title} de la sélection`,
   endOf: (title) => `Fin : ${title}`,
   lasted: (duration) => `durée : ${duration}`,
+  runningFor: (date, duration) => `${date} – en cours depuis ${duration}`,
   endsAria: (title, date, duration) =>
     `Fin de « ${title} » : ${date}${duration ? `, durée ${duration}` : ''}. Aller à l’événement`,
 

@@ -429,3 +429,195 @@ describe('the Live button', () => {
     assert.match(custom.root.innerHTML, /aria-label="On air: keep the view on the current time"><span class="ck-live-dot"><\/span>On air</);
   });
 });
+
+// A UTC clock timeline showing [start, end] with the given events, rendered once.
+function running(events, start = NOW - 30 * MINUTE, end = NOW + 30 * MINUTE, options = {}) {
+  return clock(start, end, { events, timeZone: 'UTC', ...options });
+}
+const button = (timeline, id) => timeline._buttons.get(id).el;
+const laneOf = (timeline, id) => timeline.items.find((it) => it.id === id).lane;
+const job = (fields = {}) => ({ id: 'job', title: 'Job', start: '2026-11-17T09:45:00Z', running: true, ...fields });
+
+describe('running events', () => {
+  test('draw a bar from the start to now', () => {
+    const timeline = running([job()]);
+    const el = button(timeline, 'job');
+    assert.match(el.className, /\bck-range ck-running\b/);
+    assert.equal(el.style.left, '250.0px');
+    assert.equal(el.style.width, '250.0px');
+  });
+
+  test('grow as time passes, with the "now" line', () => {
+    // An hour across 1000px: half a pixel is 1.8 seconds.
+    const timeline = running([job()]);
+    wait(1800);
+    assert.equal(button(timeline, 'job').style.width, '250.5px');
+    assert.equal(nowLine(timeline), 500.5);
+    wait(10 * MINUTE);
+    assert.equal(button(timeline, 'job').style.width, '417.2px');
+  });
+
+  test('grow while following', () => {
+    const timeline = running([job()], NOW - 20 * MINUTE, NOW - 10 * MINUTE, { follow: true });
+    dom.frame();
+    wait(MINUTE);
+    const el = button(timeline, 'job');
+    // The view is [now - 9.5 min, now + 0.5 min]; the bar starts before it.
+    assert.equal(el.style.left, `${((NOW - 15 * MINUTE - (NOW + MINUTE - 9.5 * MINUTE)) / (10 * MINUTE) * 1000).toFixed(1)}px`);
+    assert.equal(el.style.width, `${(16 * MINUTE / (10 * MINUTE) * 1000).toFixed(1)}px`);
+  });
+
+  test('say how long they have run in the tooltip, kept current wherever the view is', () => {
+    // A view that ends before now: the live loop sleeps, the text doesn't.
+    const timeline = running([job()], NOW - 50 * MINUTE, NOW - 10 * MINUTE);
+    assert.equal(waiting(timeline), false);
+    const el = button(timeline, 'job');
+    assert.equal(el.title, 'Job · 17 Nov 2026, 09:45:00 – running for 15 minutes');
+    mock.timers.tick(12 * SECOND);
+    assert.equal(el.title, 'Job · 17 Nov 2026, 09:45:00 – running for 15 minutes, 12 seconds');
+  });
+
+  test('count no finer than their start was given', () => {
+    const timeline = running([job({ start: '2026-11-17T09:45Z' })]);
+    mock.timers.tick(30 * SECOND);
+    assert.equal(button(timeline, 'job').title, 'Job · 17 Nov 2026, 09:45 – running for 15 minutes');
+  });
+
+  test('that start later than now show only their start, as a short bar', () => {
+    const timeline = running([job({ start: '2026-11-17T10:15:00Z' })]);
+    const el = button(timeline, 'job');
+    assert.equal(el.title, 'Job · 17 Nov 2026, 10:15:00');
+    assert.equal(el.style.width, '4.0px');
+    wait(16 * MINUTE);
+    assert.equal(el.title, 'Job · 17 Nov 2026, 10:15:00 – running for 1 minute');
+    assert.equal(el.style.width, '16.7px');
+  });
+
+  test('say how long they have run in the story card, kept current', () => {
+    const timeline = running([job()]);
+    timeline.select('job');
+    assert.match(
+      timeline.storyEl.innerHTML,
+      /<span class="ck-running-text" data-id="job">17 Nov 2026, 09:45:00 – running for 15 minutes<\/span>/,
+    );
+    // The stand-in DOM doesn't find elements in markup; hand the timer the span.
+    const span = { dataset: { id: 'job' }, textContent: '' };
+    timeline.storyEl.querySelectorAll = (selector) => (selector === '.ck-running-text' ? [span] : []);
+    mock.timers.tick(SECOND);
+    assert.equal(span.textContent, '17 Nov 2026, 09:45:00 – running for 15 minutes, 1 second');
+  });
+
+  test('keep their lane to themselves until they end', () => {
+    // Without running, the job's bar ends at 09:47 and the deploy fits after it.
+    const deploy = { id: 'deploy', title: 'Deploy', start: '2026-11-17T09:50:00Z' };
+    const timeline = running([job(), deploy]);
+    assert.equal(laneOf(timeline, 'job'), 0);
+    assert.equal(laneOf(timeline, 'deploy'), 1);
+    timeline.updateEvent('job', { end: '2026-11-17T09:47:00Z', running: false });
+    dom.frame();
+    assert.equal(laneOf(timeline, 'deploy'), 0);
+  });
+
+  test('keep their lane when events arrive after where they reached when packed', () => {
+    // Packed at 10:00; at 10:05 an alert starts at 10:02, on the grown bar.
+    const timeline = running([job()]);
+    wait(5 * MINUTE);
+    timeline.addEvents({ id: 'alert', title: 'Alert', start: '2026-11-17T10:02:00Z' });
+    dom.frame();
+    assert.equal(laneOf(timeline, 'alert'), 1);
+  });
+
+  test('stop growing once closed', () => {
+    const timeline = running([job()]);
+    timeline.updateEvent('job', { end: '2026-11-17T10:00:00Z', running: false });
+    dom.frame();
+    const el = button(timeline, 'job');
+    assert.doesNotMatch(el.className, /ck-running/);
+    assert.equal(el.title, 'Job · 17 Nov 2026, 09:45:00 – 17 Nov 2026, 10:00:00');
+    wait(10 * MINUTE);
+    assert.equal(el.style.width, '250.0px');
+  });
+
+  test('closed without an end become a point at their start', () => {
+    const timeline = running([job()]);
+    timeline.updateEvent('job', { running: false });
+    dom.frame();
+    assert.match(button(timeline, 'job').className, /\bck-point\b/);
+    assert.equal(timeline.items[0].to, null);
+  });
+
+  test('stay running through a patch that leaves running alone', () => {
+    const timeline = running([job()]);
+    timeline.updateEvent('job', { title: 'Nightly job' });
+    wait(MINUTE);
+    const el = button(timeline, 'job');
+    assert.match(el.className, /ck-running/);
+    assert.equal(el.title, 'Nightly job · 17 Nov 2026, 09:45:00 – running for 16 minutes');
+  });
+
+  test('count to now for fit()', () => {
+    const timeline = running([job({ start: '2026-11-17T08:00:00Z' })], NOW - 5 * HOUR, NOW - 4 * HOUR);
+    timeline.fit();
+    assert.ok(timeline.start <= NOW - 2 * HOUR && timeline.end >= NOW, `${timeline.start} – ${timeline.end}`);
+  });
+
+  test('cannot have an end, naming the event', () => {
+    assert.throws(() => running([job({ end: '2026-11-17T10:00:00Z' })]), {
+      message: 'Chroniko: event "Job" is running and has an end; set running: false when it ends',
+    });
+    const timeline = running([job()]);
+    assert.throws(() => timeline.updateEvent('job', { end: '2026-11-17T10:00:00Z' }), {
+      message: 'Chroniko: event "Job" is running and has an end; set running: false when it ends',
+    });
+    assert.equal(timeline.items[0].running, true);
+  });
+
+  test('need running to be true or false', () => {
+    assert.throws(() => running([job({ running: 'yes' })]), {
+      message: 'Chroniko: event "Job" has an invalid running: must be true or false, not "yes"',
+    });
+  });
+
+  test('need the clock scale', () => {
+    assert.throws(() => new Chroniko(dom.container, { events: [{ title: 'Siege', start: 1453, running: true }] }), {
+      message: "Chroniko: event \"Siege\" is running, which needs timeScale: 'clock'",
+    });
+  });
+
+  test('running: false is an ordinary event', () => {
+    const timeline = running([job({ running: false })]);
+    assert.match(button(timeline, 'job').className, /\bck-point\b/);
+  });
+
+  test('stop updating their text while the page is hidden, and catch up when shown', () => {
+    const timeline = running([job()]);
+    const el = button(timeline, 'job');
+    dom.document.hidden = true;
+    mock.timers.tick(SECOND);
+    mock.timers.tick(5 * SECOND);
+    assert.equal(el.title, 'Job · 17 Nov 2026, 09:45:00 – running for 15 minutes, 1 second');
+    assert.equal(timeline._runningTimer, 0);
+    dom.document.hidden = false;
+    dom.document.fire('visibilitychange');
+    mock.timers.tick(SECOND);
+    assert.equal(el.title, 'Job · 17 Nov 2026, 09:45:00 – running for 15 minutes, 7 seconds');
+  });
+
+  test('stop the text timer when none are left, and on destroy', () => {
+    const timeline = running([job()]);
+    timeline.removeEvents('job');
+    mock.timers.tick(SECOND);
+    assert.equal(timeline._runningTimer, 0);
+    const other = running([job()]);
+    other._renderRunningText = () => assert.fail('the text timer ran after destroy()');
+    other.destroy();
+    mock.timers.tick(5 * SECOND);
+  });
+
+  test('are translated, and uiText can replace the text', () => {
+    const japanese = running([job()], undefined, undefined, { language: 'ja' });
+    assert.match(button(japanese, 'job').title, /・進行中（15分）$/);
+    const custom = running([job()], undefined, undefined, { uiText: { runningFor: (date, d) => `${date} (${d} so far)` } });
+    assert.equal(button(custom, 'job').title, 'Job · 17 Nov 2026, 09:45:00 (15 minutes so far)');
+  });
+});

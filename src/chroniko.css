@@ -391,6 +391,17 @@
   transform: translateY(-50%);
 }
 
+/* A running event's bar grows to now: open at its right end, and stronger
+   toward it. */
+.ck-range.ck-running {
+  border-radius: 4px 0 0 4px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--ck-color) 22%, transparent),
+    color-mix(in srgb, var(--ck-color) 45%, transparent)
+  );
+}
+
 .ck-range.ck-selected {
   box-shadow: 0 0 0 2px var(--ck-color);
 }

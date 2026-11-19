@@ -37,6 +37,7 @@ const FLASH_MS = 1500; // matches the .ck-event.ck-flash animation in CSS
 const NOW_STEP_PX = 0.5; // px the "now" line may fall behind before it is moved
 const NOW_MAX_WAIT = 60_000; // ms between checks of the "now" line, at most
 const FOLLOW_MARGIN = 0.05; // share of the view kept after now while following
+const RUNNING_TEXT_MS = 1000; // ms between updates of "running for …" text
 
 // The UI text for a language: the built-in locale over English (so a key it
 // lacks still has text), then the caller's overrides, plus the language's
@@ -141,7 +142,10 @@ export class Chroniko {
   /**
    * @param {string|HTMLElement} container  Element (or selector) to render into.
    * @param {object} options
-   * @param {Array}  options.events     [{ id, title, start, end?, category?, tags?, description?, url?, color? }]
+   * @param {Array}  options.events     [{ id, title, start, end?, running?, category?, tags?, description?, url?, color? }]
+   *                                    running: true (clock scale only, and without an end) draws a bar
+   *                                    from start to now that grows as time passes; close it with
+   *                                    updateEvent(id, { end, running: false }).
    * @param {string} [options.timeScale] 'historical' (default): dates are years, months and days, read by
    *                                    parseDate. 'clock': dates are instants (epoch ms, Date or ISO string)
    *                                    read by parseTime, shown in the time zone.
@@ -318,7 +322,8 @@ export class Chroniko {
     const old = this.items[index];
     const kept = {};
     if (!Object.hasOwn(patch, 'start')) kept.start = old.start;
-    if (!Object.hasOwn(patch, 'end')) Object.assign(kept, { end: old.end, to: old.to });
+    // A running event's range end is now, not an end to keep.
+    if (!Object.hasOwn(patch, 'end')) Object.assign(kept, { end: old.end, to: old.end ? old.to : null });
     const item = this._toItem({ ...old.event, ...patch }, id, kept);
     this.items.splice(index, 1);
     this._insert(item);
@@ -552,6 +557,7 @@ export class Chroniko {
     clearTimeout(this._zoomTimer);
     clearTimeout(this._hintTimer);
     clearTimeout(this._hashTimer);
+    clearTimeout(this._runningTimer);
     if (this._onHashChange) window.removeEventListener('hashchange', this._onHashChange);
     this._resizeObserver.disconnect();
     document.fonts?.removeEventListener('loadingdone', this._onFontsLoaded);
@@ -840,9 +846,13 @@ export class Chroniko {
     };
     document.fonts?.addEventListener('loadingdone', this._onFontsLoaded);
 
-    // The live loop sleeps while the page is hidden and catches up when it's shown.
+    // The live loop and the running text sleep while the page is hidden, and
+    // catch up when it's shown.
     if (this.nowEl) {
-      this._onVisibilityChange = () => this._live();
+      this._onVisibilityChange = () => {
+        this._live();
+        this._syncRunningText();
+      };
       document.addEventListener('visibilitychange', this._onVisibilityChange);
     }
   }
@@ -1046,15 +1056,30 @@ export class Chroniko {
         throw new Error(`Chroniko: event "${event.title ?? id}" has an invalid ${field}: ${reason}`);
       }
     };
+    const name = event.title ?? id;
     const start = date('start');
-    if (!start) throw new Error(`Chroniko: event "${event.title ?? id}" has no start date`);
+    if (!start) throw new Error(`Chroniko: event "${name}" has no start date`);
     const end = date('end');
-    const to = Object.hasOwn(kept, 'to') ? kept.to : end ? this.scale.rangeEnd(end) : null;
+    // A running event has started and not yet ended: its bar runs to now, so
+    // it has no end until it is closed with { end, running: false }.
+    const running = event.running ?? false;
+    if (typeof running !== 'boolean') {
+      throw new Error(`Chroniko: event "${name}" has an invalid running: must be true or false, not ${JSON.stringify(running)}`);
+    }
+    if (running && !this.scale.zone) {
+      throw new Error(`Chroniko: event "${name}" is running, which needs timeScale: 'clock'`);
+    }
+    if (running && end) {
+      throw new Error(`Chroniko: event "${name}" is running and has an end; set running: false when it ends`);
+    }
+    const to = running
+      ? Math.max(start.value, Date.now())
+      : Object.hasOwn(kept, 'to') ? kept.to : end ? this.scale.rangeEnd(end) : null;
     // Compared by where the range stops, so a date-only end on the start's
     // day (or a historical end in the start's year) is fine.
     if (to != null && to < start.value) {
       throw new Error(
-        `Chroniko: event "${event.title ?? id}" ends (${shown(event.end)}) before it starts (${shown(event.start)})`,
+        `Chroniko: event "${name}" ends (${shown(event.end)}) before it starts (${shown(event.start)})`,
       );
     }
     return {
@@ -1063,7 +1088,8 @@ export class Chroniko {
       start,
       end,
       from: start.value,
-      to,
+      to, // a running event's is moved to now as time passes; see _runTo
+      running,
       category: event.category ?? null,
       // A single string is one tag; blanks and repeats are dropped.
       tags: [...new Set([event.tags ?? []].flat().map((t) => String(t).trim()).filter(Boolean))],
@@ -1115,11 +1141,14 @@ export class Chroniko {
   }
 
   // What is derived from the whole event list: the legend's categories (in
-  // order of first appearance) and the data span behind the default maxSpan.
+  // order of first appearance), the data span behind the default maxSpan,
+  // and the running events, which change as time passes.
   _itemsChanged() {
     this.categories = [...new Set(this.items.map((it) => it.category).filter(Boolean))];
     const [min, max] = this._extent();
     this._dataSpan = max - min;
+    this._running = this.items.filter((it) => it.running);
+    this._syncRunningText();
   }
 
   // addEvents, updateEvent and removeEvents redraw the legend, tag bar and
@@ -1185,6 +1214,7 @@ export class Chroniko {
   _render() {
     // While following, a render (a zoom, new data) also brings the view to now.
     const now = Date.now();
+    this._runTo(now);
     if (this._following) this._followTo(now);
     this._draw();
     this._live(now);
@@ -1207,12 +1237,13 @@ export class Chroniko {
   //
   // A loop separate from _scheduleRender that moves only what changes as time
   // passes, so the time passing never relayouts or rebuilds the lanes: the
-  // "now" line, and while following, the view, which only pans. The loop
-  // wakes only when there is something to move: once now has moved
-  // NOW_STEP_PX (every frame when zoomed in to seconds, every few minutes when
-  // a day fills the view), or when now reaches a view that is ahead of it. A
-  // view that ends before now, and isn't following, never needs it. It sleeps
-  // while the page is hidden.
+  // "now" line, running events' bars, and while following, the view, which
+  // only pans. The loop wakes only when there is something to move: once now
+  // has moved NOW_STEP_PX (every frame when zoomed in to seconds, every few
+  // minutes when a day fills the view), or when now reaches a view that is
+  // ahead of it. A view that ends before now, and isn't following, never
+  // needs it: a running bar in it already reaches past its right edge. It
+  // sleeps while the page is hidden.
   //
   // drawnAt is the time a render has just drawn the view for; without it,
   // the loop itself moves a following view to now.
@@ -1221,8 +1252,16 @@ export class Chroniko {
     this._stopLive();
     if (!this.nowEl) return;
     const now = drawnAt ?? Date.now();
-    if (drawnAt == null && this._following && this._followTo(now)) this._draw();
     const width = this.viewport.clientWidth;
+    if (drawnAt == null) {
+      this._runTo(now);
+      if (this._following && this._followTo(now)) this._draw();
+      // Running bars that may be in view grow to now; nothing else moved.
+      else if (width && this._running.length && now >= this.start) {
+        const scale = width / (this.end - this.start);
+        this._renderEvents(width, (v) => (v - this.start) * scale);
+      }
+    }
     if (!width) return;
     const scale = width / (this.end - this.start);
     const left = (now - this.start) * scale;
@@ -1263,6 +1302,39 @@ export class Chroniko {
     this._liveFrame = this._liveTimer = 0;
   }
 
+  // Running bars end at now (or at their start, until now reaches it).
+  _runTo(now) {
+    for (const it of this._running) it.to = Math.max(it.from, now);
+  }
+
+  // Running events' tooltips and story cards say how long they have been
+  // running. This timer keeps that text current, once a second, while there
+  // are running events and the page is visible, wherever the view is; their
+  // bars grow in the live loop. Started at most once, so events streaming in
+  // don't keep putting it off.
+  _syncRunningText() {
+    if (this._runningTimer || !this._running.length || document.hidden) return;
+    this._runningTimer = setTimeout(() => {
+      this._runningTimer = 0;
+      this._renderRunningText();
+      this._syncRunningText();
+    }, RUNNING_TEXT_MS);
+  }
+
+  _renderRunningText() {
+    const byId = new Map(this._running.map((it) => [it.id, it]));
+    for (const it of this._running) {
+      const b = this._buttons.get(it.id);
+      if (b) writeIfChanged(b, 'tooltip', this._tooltip(it), (v) => (b.el.title = v));
+    }
+    for (const el of this.storyEl.querySelectorAll('.ck-running-text')) {
+      const it = byId.get(el.dataset.id);
+      if (!it) continue;
+      const text = this._rangeText(it);
+      if (el.textContent !== text) el.textContent = text;
+    }
+  }
+
   // Greedy lane packing over every visible-category event at the given scale:
   // each event goes into the first lane whose previous occupant (marker +
   // label) ends before this one starts. Packing the whole data set, not just
@@ -1289,7 +1361,8 @@ export class Chroniko {
       const x2 = isRange ? it.to * scale : x1;
       const left = isRange ? x1 : x1 - DOT / 2;
       const labelOffset = isRange ? LABEL_PAD : DOT + LABEL_PAD;
-      const right = Math.max(x2, left + labelOffset + it.labelWidth) + LANE_GAP;
+      // A running bar keeps growing, so its lane stays taken until it ends.
+      const right = it.running ? Infinity : Math.max(x2, left + labelOffset + it.labelWidth) + LANE_GAP;
       let lane = laneEnds.findIndex((end) => end <= left);
       if (lane < 0) lane = laneEnds.push(right) - 1;
       else laneEnds[lane] = right;
@@ -1363,7 +1436,7 @@ export class Chroniko {
         }
       }
       const cls =
-        `ck-event ${isRange ? 'ck-range' : 'ck-point'}${on ? ' ck-selected' : ''}` +
+        `ck-event ${isRange ? 'ck-range' : 'ck-point'}${it.running ? ' ck-running' : ''}${on ? ' ck-selected' : ''}` +
         `${this._hoverClass(it)}${flash ? ' ck-flash' : ''}`;
       if (el.className !== cls) el.className = cls;
       const pressed = String(on);
@@ -1371,8 +1444,7 @@ export class Chroniko {
 
       const title = it.event.title ?? '';
       writeIfChanged(b, 'text', title, () => (label.textContent = title));
-      const tooltip = `${title} · ${this._rangeText(it)}`;
-      writeIfChanged(b, 'tooltip', tooltip, () => (el.title = tooltip));
+      writeIfChanged(b, 'tooltip', this._tooltip(it), (v) => (el.title = v));
       writeIfChanged(b, 'color', it.color, () => el.style.setProperty('--ck-color', it.color));
       writeIfChanged(b, 'left', `${left.toFixed(1)}px`, (v) => (el.style.left = v));
       writeIfChanged(b, 'top', `${LANE_TOP + it.lane * LANE_HEIGHT}px`, (v) => (el.style.top = v));
@@ -1538,7 +1610,9 @@ export class Chroniko {
                 aria-label="${this.m.remove(esc(e.title ?? ''))}">×</button>
         <div class="ck-meta">
           ${item.category ? `<span class="ck-badge">${esc(this._categoryLabel(item.category))}</span>` : ''}
-          <span>${esc(this._rangeText(item))}</span>
+          ${item.running
+            ? `<span class="ck-running-text" data-id="${esc(item.id)}">${esc(this._rangeText(item))}</span>`
+            : `<span>${esc(this._rangeText(item))}</span>`}
         </div>
         <h3 class="ck-title">${esc(e.title ?? '')}</h3>
         ${e.description ? `<p class="ck-description">${esc(e.description)}</p>` : ''}
@@ -1550,8 +1624,20 @@ export class Chroniko {
       </li>`;
   }
 
+  _tooltip(item) {
+    return `${item.event.title ?? ''} · ${this._rangeText(item)}`;
+  }
+
+  // A running event says how long it has run so far, to the second at most,
+  // or no less coarsely than its start was given; one that starts later
+  // than now shows only its start.
   _rangeText(item) {
     const start = this.scale.formatDate(item.start, this.m);
+    if (item.running) {
+      const now = { scale: 'clock', value: Date.now(), precision: 'second' };
+      const duration = this.scale.formatDuration(item.start, now, this.m);
+      return duration ? this.m.runningFor(start, duration) : start;
+    }
     return item.end ? `${start} – ${this._endText(item)}` : start;
   }
 

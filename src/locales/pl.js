@@ -27,6 +27,7 @@ export default {
   remove: (title) => `Usuń ${title} z wyboru`,
   endOf: (title) => `Koniec: ${title}`,
   lasted: (duration) => `czas trwania: ${duration}`,
+  runningFor: (date, duration) => `${date} – w toku: ${duration}`,
   endsAria: (title, date, duration) =>
     `Koniec: ${title}, ${date}${duration ? `, czas trwania ${duration}` : ''}. Przejdź do wydarzenia`,
 

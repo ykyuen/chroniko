@@ -25,6 +25,7 @@ export default {
   remove: (title) => `「${title}」を選択から外す`,
   endOf: (title) => `${title}の終わり`,
   lasted: (duration) => `期間：${duration}`,
+  runningFor: (date, duration) => `${date}・進行中（${duration}）`,
   endsAria: (title, date, duration) => `${title}は${date}に終了${duration ? `（期間：${duration}）` : ''}。出来事へ移動`,
 
   months: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],

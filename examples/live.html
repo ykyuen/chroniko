@@ -19,7 +19,7 @@
   <body>
     <main>
       <h1>Chroniko: live activity</h1>
-      <p>A made-up feed of deploys, jobs, errors and alerts, generated in this page. The red line is now. Deploys and jobs appear as a point when they start and become a bar when they finish. The view follows now while the ● Live button is lit; zooming keeps following, and dragging, the arrow keys or Fit stop it. Press ● Live to go back.</p>
+      <p>A made-up feed of deploys, jobs, errors and alerts, generated in this page. The red line is now. Deploys, jobs and some alerts are bars that grow while they run, and stop when they finish. The view follows now while the ● Live button is lit; zooming keeps following, and dragging, the arrow keys or Fit stop it. Press ● Live to go back.</p>
       <div class="controls">
         <span>
           <label for="rate">Events per second</label>
@@ -83,16 +83,16 @@
         }
       }
 
-      // Something that started at `at` and lasts `ms`: a point until it ends,
-      // then a bar. One that has already ended is added as a bar.
+      // Something that started at `at` and lasts `ms`: a running bar that
+      // grows until it ends. One that has already ended is added as a bar.
       function ranged(event, at, ms) {
         const end = at + ms;
         if (end <= Date.now()) return add({ ...event, start: at, end });
-        add({ ...event, start: at });
+        add({ ...event, start: at, running: true });
         open.add(event.id);
         setTimeout(() => {
           if (!open.delete(event.id)) return; // removed in the meantime
-          timeline.updateEvent(event.id, { end });
+          timeline.updateEvent(event.id, { end, running: false });
         }, end - Date.now());
       }
 

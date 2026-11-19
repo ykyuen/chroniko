@@ -26,6 +26,7 @@ export default {
   remove: (title) => `${title} uit selectie verwijderen`,
   endOf: (title) => `Einde: ${title}`,
   lasted: (duration) => `duur: ${duration}`,
+  runningFor: (date, duration) => `${date} – loopt al ${duration}`,
   endsAria: (title, date, duration) => `Einde van ${title}: ${date}${duration ? `, duur ${duration}` : ''}. Ga naar gebeurtenis`,
 
   months: ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'],

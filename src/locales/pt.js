@@ -26,6 +26,7 @@ export default {
   remove: (title) => `Remover ${title} da seleção`,
   endOf: (title) => `Fim: ${title}`,
   lasted: (duration) => `duração: ${duration}`,
+  runningFor: (date, duration) => `${date} – em andamento há ${duration}`,
   endsAria: (title, date, duration) => `Fim de ${title}: ${date}${duration ? `, duração ${duration}` : ''}. Ir para o evento`,
 
   months: ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'],

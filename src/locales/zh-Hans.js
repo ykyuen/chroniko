@@ -24,6 +24,7 @@ export default {
   remove: (title) => `从已选事件中移除“${title}”`,
   endOf: (title) => `${title}结束`,
   lasted: (duration) => `历时${duration}`,
+  runningFor: (date, duration) => `${date}・进行中，已持续${duration}`,
   endsAria: (title, date, duration) => `${title}于${date}结束${duration ? `，历时${duration}` : ''}。前往事件`,
 
   months: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
