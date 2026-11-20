@@ -4,6 +4,8 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-20
+
 ### Added
 
 - Any IANA time zone on the clock scale, e.g. `timeZone: 'Asia/Tokyo'`, for a venue's time or a region's business hours. `timeZone`, `timeZones`, `setTimeZone`, `setState` and the URL's `ck-tz` take any name the browser's `Intl` knows, aliases such as `'US/Eastern'` included; an unknown name throws. A zone keeps the name it was given, with its capitalisation corrected, and names `Intl` reads as UTC, such as `'Etc/UTC'`, are `'UTC'`. Times, axis ticks and daylight saving changes follow the zone wherever the viewer is. See the README's "Time zones" section.
@@ -174,7 +176,8 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 - Initial release.
 
-[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.7.1...HEAD
+[Unreleased]: https://github.com/ykyuen/chroniko/compare/0.8.0...HEAD
+[0.8.0]: https://github.com/ykyuen/chroniko/compare/0.7.1...0.8.0
 [0.7.1]: https://github.com/ykyuen/chroniko/compare/0.7.0...0.7.1
 [0.7.0]: https://github.com/ykyuen/chroniko/compare/0.6.2...0.7.0
 [0.6.2]: https://github.com/ykyuen/chroniko/compare/0.6.1...0.6.2
