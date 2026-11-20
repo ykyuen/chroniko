@@ -88,9 +88,9 @@ describe('the timeZone option', () => {
     assert.deepEqual(timeline.calls, []);
   });
 
-  test('throws for a zone that is not local or UTC', () => {
-    for (const timeZone of ['Asia/Tokyo', 'utc', '', 8]) {
-      assert.throws(() => clock({ timeZone }), /timeZone must be 'local' or 'UTC'.*IANA time zones/);
+  test('throws for a zone Intl does not know', () => {
+    for (const timeZone of ['Mars/Olympus_Mons', 'Local', '', 8]) {
+      assert.throws(() => clock({ timeZone }), /timeZone must be 'local', 'UTC' or an IANA time zone/);
     }
   });
 
@@ -125,7 +125,7 @@ describe('setTimeZone', () => {
 
   test('throws for an unknown zone and changes nothing', () => {
     const timeline = clock();
-    assert.throws(() => timeline.setTimeZone('Asia/Tokyo'), /timeZone must be 'local' or 'UTC'/);
+    assert.throws(() => timeline.setTimeZone('Mars/Olympus_Mons'), /timeZone must be 'local', 'UTC' or an IANA time zone/);
     assert.equal(timeline.getTimeZone(), 'local');
     assert.deepEqual(timeline.calls, []);
   });
@@ -288,7 +288,7 @@ describe('the timeZones option', () => {
       assert.throws(() => clock({ timeZones }), /timeZones must be an array of at least two time zones/);
     }
     assert.throws(() => clock({ timeZones: ['UTC', 'local', 'UTC'] }), /timeZones lists "UTC" more than once/);
-    assert.throws(() => clock({ timeZones: ['local', 'Asia/Tokyo'] }), /timeZone must be 'local' or 'UTC'/);
+    assert.throws(() => clock({ timeZones: ['local', 'Mars/Olympus_Mons'] }), /timeZone must be 'local', 'UTC' or an IANA time zone/);
   });
 });
 
@@ -327,7 +327,7 @@ describe('setState with a time zone', () => {
     const bad = [
       [{ timeZone: 'UTC', start: 'nope', end: '2026-11-05' }, /setState start is invalid: cannot parse time "nope"/],
       [{ timeZone: 'UTC', start: '2026-11-05', end: '2026-11-04' }, /setState start \(2026-11-05\) must be before setState end \(2026-11-04\)/],
-      [{ timeZone: 'Asia/Tokyo', hidden: ['job'] }, /timeZone must be 'local' or 'UTC'/],
+      [{ timeZone: 'Mars/Olympus_Mons', hidden: ['job'] }, /timeZone must be 'local', 'UTC' or an IANA time zone/],
       [{ timeZone: 'UTC', start: '2026-11-04', end: '2026-11-05', hidden: 'job' }, TypeError],
       [{ timeZone: 'UTC', selected: 5 }, TypeError],
     ];
@@ -407,7 +407,7 @@ describe('the URL hash', () => {
   });
 
   test('a zone it does not know is ignored', (t) => {
-    for (const tz of ['Asia%2FTokyo', 'utc', '%E0%A4%A']) {
+    for (const tz of ['Mars%2FOlympus_Mons', 'utc', '%E0%A4%A']) {
       dom.location.hash = `#ck-tz=${tz}&ck-sel=deploy`;
       const timeline = synced(t, { timeZone: 'UTC' });
       assert.equal(timeline.getTimeZone(), 'UTC');
