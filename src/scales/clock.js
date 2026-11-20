@@ -241,6 +241,13 @@ function wallClockTicks(start, end, unit, n, zone) {
     const g = floor(f);
     return g[unit] === f[unit] && g.minute === f.minute && g.second === f.second && g.ms === f.ms;
   };
+  // The instant of the round time g, or of the next round time if g was
+  // skipped: a skipped time moves forward by the offset change, which isn't
+  // round when that's half an hour (02:00 becomes 02:30 on Lord Howe Island).
+  const roundInstant = (g) => {
+    const value = zone.instant(g);
+    return isRound(zone.fields(value)) ? value : zone.instant({ ...g, [unit]: g[unit] + n });
+  };
   // Step by elapsed time while that stays on round times; after an offset
   // change that breaks it (e.g. 3-hour steps across DST), go to the next
   // round time instead.
@@ -249,12 +256,12 @@ function wallClockTicks(start, end, unit, n, zone) {
     const f = zone.fields(after);
     if (isRound(f)) return after;
     const g = floor(f);
-    const down = zone.instant(g);
+    const down = roundInstant(g);
     if (down > t) return down;
-    const up = zone.instant({ ...g, [unit]: g[unit] + n });
+    const up = roundInstant({ ...g, [unit]: g[unit] + n });
     return up > t ? up : after;
   };
-  let t = zone.instant(floor(zone.fields(start)));
+  let t = roundInstant(floor(zone.fields(start)));
   while (t < start) t = next(t);
   const ticks = [];
   for (; t <= end; t = next(t)) ticks.push(t);
