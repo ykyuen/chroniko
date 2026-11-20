@@ -438,3 +438,107 @@ describe('the URL hash', () => {
     assert.equal(param('ck-tz'), undefined);
   });
 });
+
+// IANA zones through the class. The zone maths is covered in zone.test.js
+// and clock-ticks.test.js; these check the wiring.
+describe('IANA time zones', () => {
+  const synced = (t, options) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    return clock({ syncUrl: true, ...options });
+  };
+  const param = (key) => new RegExp(`[#&]${key}=([^&]*)`).exec(dom.location.hash)?.[1];
+
+  test('the timeZone option reads offset-free strings in that zone', () => {
+    const timeline = clock({ timeZone: 'Asia/Tokyo' });
+    assert.equal(timeline.getTimeZone(), 'Asia/Tokyo');
+    assert.equal(timeline.getState().timeZone, 'Asia/Tokyo');
+    assert.deepEqual(span(timeline, 'deploy'), [utc('2026-11-04T00:00Z'), utc('2026-11-04T00:30Z')]);
+    // A date-only range covers Tokyo's whole day.
+    assert.deepEqual(span(timeline, 'oncall'), [utc('2026-11-03T15:00Z'), utc('2026-11-04T15:00Z')]);
+    assert.deepEqual(timeline.calls, []);
+  });
+
+  test("names keep the developer's alias, with Intl's capitalisation", () => {
+    assert.equal(clock({ timeZone: 'asia/tokyo' }).getTimeZone(), 'Asia/Tokyo');
+    const timeline = clock({ timeZone: 'US/Eastern' });
+    assert.equal(timeline.getTimeZone(), 'US/Eastern');
+    timeline.setTimeZone('America/New_York'); // the same zone, by another name
+    assert.equal(timeline.getTimeZone(), 'America/New_York');
+    assert.deepEqual(timeline.calls, ['America/New_York']);
+    // Names Intl reads as UTC are UTC.
+    assert.equal(clock({ timeZone: 'Etc/UTC' }).getTimeZone(), 'UTC');
+  });
+
+  test('setTimeZone relabels the axis, tooltips and story, and names the offset', () => {
+    const timeline = clock();
+    timeline.select('deploy');
+    timeline.setTimeZone('America/New_York');
+    assert.deepEqual(timeline.calls, ['America/New_York']);
+    assert.equal(tooltip(timeline, 'Deploy'), 'Deploy · 3 Nov 2026, 20:00 – 3 Nov 2026, 20:30');
+    assert.match(timeline.storyEl.innerHTML, /3 Nov 2026, 20:00 – 3 Nov 2026, 20:30/);
+
+    timeline.zoomTo(utc('2026-11-04T05:00Z'), utc('2026-11-05T05:00Z')); // New York's 4 November
+    assert.deepEqual(axisLabels(timeline), ['4 Nov', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00', '5 Nov']);
+    assert.equal(timeline.zoneEl.textContent, 'GMT-5');
+    // A view across the night clocks go back names both offsets.
+    timeline.zoomTo(utc('2026-10-31T04:00Z'), utc('2026-11-02T05:00Z'));
+    dom.frame();
+    assert.equal(timeline.zoneEl.textContent, 'GMT-4 – GMT-5');
+  });
+
+  test('setState takes an IANA zone, and a getState() result puts it back', () => {
+    const timeline = clock();
+    timeline.setState({ timeZone: 'Asia/Kolkata', start: '2026-11-04', end: '2026-11-05' });
+    assert.equal(timeline.getTimeZone(), 'Asia/Kolkata');
+    // The view's strings are read in the zone of the state.
+    assert.deepEqual([timeline.getState().start, timeline.getState().end], [utc('2026-11-03T18:30Z'), utc('2026-11-04T18:30Z')]);
+    const saved = timeline.getState();
+    timeline.setTimeZone('UTC');
+    timeline.setState(saved);
+    assert.deepEqual(timeline.getState(), saved);
+  });
+
+  test('timeZones throws for two names of the same zone', () => {
+    assert.throws(
+      () => clock({ timeZones: ['local', 'US/Eastern', 'America/New_York'] }),
+      /timeZones lists "US\/Eastern" and "America\/New_York", which are the same time zone/,
+    );
+    assert.throws(() => clock({ timeZones: ['Asia/Tokyo', 'asia/tokyo'] }), /timeZones lists "Asia\/Tokyo" more than once/);
+    assert.throws(() => clock({ timeZones: ['UTC', 'Etc/UTC'] }), /timeZones lists "UTC" more than once/);
+    // The local zone isn't an alias of the machine's IANA zone: it follows the viewer.
+    assert.doesNotThrow(() => clock({ timeZones: ['local', 'Asia/Hong_Kong'] }));
+  });
+
+  test('the toggle treats an alias of a listed zone as that zone', () => {
+    const timeline = clock({ timeZone: 'UTC', timeZones: ['UTC', 'America/New_York'] });
+    clickToggle(timeline);
+    assert.equal(timeline.getTimeZone(), 'America/New_York');
+    timeline.setTimeZone('US/Eastern');
+    clickToggle(timeline);
+    assert.equal(timeline.getTimeZone(), 'UTC');
+    // A zone that isn't listed goes to the first.
+    timeline.setTimeZone('Asia/Tokyo');
+    clickToggle(timeline);
+    assert.equal(timeline.getTimeZone(), 'UTC');
+  });
+
+  test('ck-tz keeps the "/" readable and escapes the rest', (t) => {
+    const timeline = synced(t);
+    timeline.setTimeZone('Asia/Tokyo');
+    t.mock.timers.tick(250);
+    assert.equal(param('ck-tz'), 'Asia/Tokyo');
+    timeline.setTimeZone('Etc/GMT+9');
+    t.mock.timers.tick(250);
+    assert.equal(param('ck-tz'), 'Etc/GMT%2B9');
+  });
+
+  test('a link opens in its IANA zone, with or without an escaped "/"', (t) => {
+    for (const [tz, name] of [['Asia/Tokyo', 'Asia/Tokyo'], ['Asia%2FTokyo', 'Asia/Tokyo'], ['US%2FEastern', 'US/Eastern'], ['Etc/GMT%2B9', 'Etc/GMT+9']]) {
+      dom.location.hash = `#ck-tz=${tz}`;
+      const timeline = synced(t);
+      assert.equal(timeline.getTimeZone(), name);
+      assert.deepEqual(timeline.calls, [name]);
+      t.mock.timers.reset();
+    }
+  });
+});

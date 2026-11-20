@@ -115,6 +115,12 @@ function defaultId(event, index) {
   return `${prefix}-${index}`;
 }
 
+// Whether two zones are the same, also when named by different aliases
+// ('US/Eastern' and 'America/New_York' share Intl's id).
+function sameZone(a, b) {
+  return a === b || (a.id != null && a.id === b.id);
+}
+
 // The URL hash as an ordered map of raw (still encoded) key → value; a part
 // without "=" (e.g. a plain "#section" anchor) maps to null and is kept.
 function hashParams() {
@@ -151,10 +157,13 @@ export class Chroniko {
    * @param {string} [options.timeScale] 'historical' (default): dates are years, months and days, read by
    *                                    parseDate. 'clock': dates are instants (epoch ms, Date or ISO string)
    *                                    read by parseTime, shown in the time zone.
-   * @param {string} [options.timeZone] Clock scale only: 'local' (default) or 'UTC'. Times are shown, and
-   *                                    offset-free strings read, in this zone.
+   * @param {string} [options.timeZone] Clock scale only: 'local' (default), 'UTC' or an IANA time zone
+   *                                    such as 'Asia/Tokyo'. Times are shown, and offset-free strings read,
+   *                                    in this zone. An IANA name keeps the alias given ('US/Eastern') and
+   *                                    gets Intl's capitalisation; a name Intl doesn't know throws.
    * @param {string[]} [options.timeZones] Clock scale only: the zones a toolbar control switches between,
    *                                    e.g. ['local', 'UTC'] for a toggle button. No control when omitted.
+   *                                    Two names for the same zone throw.
    * @param {Function} [options.onTimeZoneChange] Called with the new time zone's name when it changes.
    * @param {boolean} [options.follow] Clock scale only: start following now (true) or not (false), which
    *                                    keeps now near the view's right edge as time passes. Panning stops it;
@@ -228,10 +237,18 @@ export class Chroniko {
       if (!Array.isArray(timeZones) || timeZones.length < 2) {
         throw new Error(`Chroniko: timeZones must be an array of at least two time zones, got ${JSON.stringify(timeZones)}`);
       }
-      const names = timeZones.map((tz) => zoneNamed(tz).name);
-      const repeated = names.find((name, i) => names.indexOf(name) !== i);
-      if (repeated) throw new Error(`Chroniko: timeZones lists ${JSON.stringify(repeated)} more than once`);
-      this._zoneNames = names;
+      const zones = timeZones.map(zoneNamed);
+      for (const [i, zone] of zones.entries()) {
+        const j = zones.findIndex((z) => sameZone(z, zone));
+        if (j === i) continue;
+        const first = zones[j];
+        throw new Error(
+          first.name === zone.name
+            ? `Chroniko: timeZones lists ${JSON.stringify(zone.name)} more than once`
+            : `Chroniko: timeZones lists ${JSON.stringify(first.name)} and ${JSON.stringify(zone.name)}, which are the same time zone`,
+        );
+      }
+      this._zones = zones;
     }
     if (storyPosition !== 'below' && storyPosition !== 'right') {
       throw new Error(`Chroniko: storyPosition must be 'below' or 'right', got ${JSON.stringify(storyPosition)}`);
@@ -568,9 +585,10 @@ export class Chroniko {
   }
 
   /**
-   * Show times in another zone: 'local' or 'UTC'. Clock scale only. Events
-   * and the view stay where they are; the axis, story and tooltips are
-   * relabeled. Offset-free strings added later are read in the new zone.
+   * Show times in another zone: 'local', 'UTC' or an IANA name such as
+   * 'Asia/Tokyo'. Clock scale only. Events and the view stay where they are;
+   * the axis, story and tooltips are relabeled. Offset-free strings added
+   * later are read in the new zone.
    */
   setTimeZone(timeZone) {
     this._setZone(this._zoneFor(timeZone));
@@ -622,7 +640,7 @@ export class Chroniko {
     this.options.onFollowChange?.(on);
   }
 
-  /** The time zone times are shown in ('local' or 'UTC'), or null on the historical scale. */
+  /** The time zone times are shown in ('local', 'UTC' or an IANA name), or null on the historical scale. */
   getTimeZone() {
     return this.scale.zone?.name ?? null;
   }
@@ -718,7 +736,7 @@ export class Chroniko {
             <div class="ck-legend" role="group" aria-label="${esc(m.categories)}"></div>
             <div class="ck-controls">
               ${this.options.follow != null ? `<button type="button" data-action="live" class="ck-live" aria-pressed="false" aria-label="${esc(m.followNow(m.live))}"><span class="ck-live-dot"></span>${esc(m.live)}</button>` : ''}
-              ${this._zoneNames ? '<button type="button" data-action="time-zone" class="ck-zone-toggle"></button>' : ''}
+              ${this._zones ? '<button type="button" data-action="time-zone" class="ck-zone-toggle"></button>' : ''}
               <button type="button" data-action="zoom-in" aria-label="${esc(m.zoomIn)}">+</button>
               <button type="button" data-action="zoom-out" aria-label="${esc(m.zoomOut)}">−</button>
               <button type="button" data-action="fit">${esc(m.fit)}</button>
@@ -1038,11 +1056,12 @@ export class Chroniko {
     button.setAttribute('aria-pressed', this.root.classList.toggle('ck-dim'));
   }
 
-  // The zone after the current one in timeZones, wrapping around. A zone
-  // that isn't listed (set through setTimeZone or the URL) goes to the first.
+  // The name of the zone after the current one in timeZones, wrapping
+  // around. An alias of a listed zone counts as that zone; a zone that isn't
+  // listed (set through setTimeZone or the URL) goes to the first.
   _nextZone() {
-    const names = this._zoneNames;
-    return names[(names.indexOf(this.scale.zone.name) + 1) % names.length];
+    const zones = this._zones;
+    return zones[(zones.findIndex((z) => sameZone(z, this.scale.zone)) + 1) % zones.length].name;
   }
 
   _zoneText(name) {
@@ -1170,7 +1189,8 @@ export class Chroniko {
       params.delete('ck-live');
       params.set('ck-view', `${+start.toFixed(digits)},${+end.toFixed(digits)}`);
     }
-    if (timeZone) params.set('ck-tz', encodeURIComponent(timeZone));
+    // A "/" is allowed in the hash, so IANA names stay readable: ck-tz=Asia/Tokyo.
+    if (timeZone) params.set('ck-tz', encodeURIComponent(timeZone).replaceAll('%2F', '/'));
     for (const [key, values] of [['ck-sel', selected], ['ck-hide', hidden]]) {
       if (values.length) params.set(key, values.map(encodeURIComponent).join(','));
       else params.delete(key);
