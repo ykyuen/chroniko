@@ -88,7 +88,8 @@ export const utc = {
   },
 };
 
-const DAY = 86_400_000;
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
 
 /**
  * A zone from the IANA database, e.g. 'Asia/Tokyo', read through Intl. The
@@ -110,8 +111,33 @@ function ianaZone(name, id) {
     second: 'numeric',
   });
 
-  // The offset in ms at an instant: positive east of Greenwich.
+  // The offset in ms at an instant: positive east of Greenwich. Intl is slow
+  // (a few µs a call, and instant() makes three or four), so offsets are
+  // remembered at the UTC days' and hours' boundaries. A day whose two ends
+  // have the same offset has it all day, since no zone changes its offset
+  // and back within a day; on a day with a change, the same goes for hours,
+  // and only an hour with the change in it is worked out exactly. Neighbouring
+  // days and hours share their boundary, so data spread over years gains too.
+  const known = new Map(); // instant on a day or hour boundary → offset there
+  const offsetAt = (t) => {
+    let value = known.get(t);
+    if (value === undefined) {
+      if (known.size >= 20_000) known.clear(); // over 50 years of days, kept from growing forever
+      value = exactOffset(t);
+      known.set(t, value);
+    }
+    return value;
+  };
   const offset = (ms) => {
+    const day = Math.floor(ms / DAY) * DAY;
+    const a = offsetAt(day);
+    if (a === offsetAt(day + DAY)) return a;
+    const hour = Math.floor(ms / HOUR) * HOUR;
+    const b = offsetAt(hour);
+    return b === offsetAt(hour + HOUR) ? b : exactOffset(ms);
+  };
+
+  const exactOffset = (ms) => {
     const f = {};
     for (const { type, value } of format.formatToParts(ms)) f[type] = value;
     const year = f.era === 'BC' || f.era === 'B' ? 1 - Number(f.year) : Number(f.year);
