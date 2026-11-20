@@ -19,7 +19,7 @@
   <body>
     <main>
       <h1>Chroniko: live activity</h1>
-      <p>A made-up feed of deploys, jobs, errors and alerts, streamed from <code>/events</code> on <code>npm start</code>’s server (or made up in this page when that isn’t there). The red line is now, and new events flash as they arrive. Deploys, jobs and some alerts are bars that grow while they run, and stop when they finish. The view follows now while the ● Live button is lit; zooming keeps following, and dragging, the arrow keys or Fit stop it. Press ● Live to go back. Events that ended more than 30 minutes ago are dropped.</p>
+      <p>A made-up feed of deploys, jobs, errors and alerts, streamed from <code>/events</code> on <code>npm start</code>’s server (or made up in this page when that isn’t there). The red line is now, and new events flash as they arrive. Deploys, jobs and some alerts are bars that grow while they run, and stop when they finish. The view follows now while the ● Live button is lit; zooming keeps following, and dragging, the arrow keys or Fit stop it. Press ● Live to go back. The time zone menu shows the times in UTC, New York or Tokyo. Events that ended more than 30 minutes ago are dropped.</p>
       <div class="controls">
         <span>
           <label for="rate">Events per second</label>
@@ -63,11 +63,21 @@
       // the rate reconnects with the same client id, which keeps the feed.
       // If the endpoint isn't there, e.g. on a static host, the page runs
       // the feed itself.
+      //
+      // Reconnecting: Chroniko can't tell that a stream dropped, and a
+      // running event whose end was lost would grow forever. The server
+      // queues what it sends while the page is away, for a minute. After
+      // longer, it starts a new feed, which begins with a "reset" message;
+      // the page then removes the running events it still has, since their
+      // ends won't come. A real backend would send its current state instead,
+      // and the page would close the events that have ended and add only the
+      // ones it doesn't have (add throws on an id it already has).
       function fromServer(api) {
         const client = crypto.randomUUID?.() ?? String(Math.random()).slice(2);
         let source = null;
         let local = null;
         let connected = false;
+        const running = new Set(); // ids added running and not yet closed
         const connect = () => {
           source?.close();
           source = new EventSource(`/events?client=${client}&rate=${rate()}`);
@@ -75,9 +85,18 @@
             connected = true;
             via = 'streamed from /events';
           });
-          source.addEventListener('add', (e) => api.add(JSON.parse(e.data)));
+          source.addEventListener('reset', () => {
+            api.remove([...running]);
+            running.clear();
+          });
+          source.addEventListener('add', (e) => {
+            const event = JSON.parse(e.data);
+            if (event.running) running.add(event.id);
+            api.add(event);
+          });
           source.addEventListener('update', (e) => {
             const { id, patch } = JSON.parse(e.data);
+            if (patch.running === false) running.delete(id);
             api.update(id, patch);
           });
           // A stream that never opened, and that the browser gave up on.
@@ -107,7 +126,7 @@
 
       const timeline = new Chroniko('#timeline', {
         timeScale: 'clock',
-        timeZones: ['local', 'UTC'],
+        timeZones: ['local', 'UTC', 'America/New_York', 'Asia/Tokyo'],
         start: Date.now() - 5 * MINUTE,
         end: Date.now(),
         follow: true,

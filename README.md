@@ -23,7 +23,7 @@ npm start   # http://localhost:3000/
 
 Add `?story=right` to the example's URL to see the [story beside the timeline](#story-beside-the-timeline), or `?lang=ja` (any [language code](#languages)) to see the UI in another language. Both can be combined, e.g. `?story=right&lang=zh-Hant`.
 
-A second page, `http://localhost:3000/examples/clock.html`, shows a day of deploys, jobs and incidents on the [clock time scale](#clock-time-scale), with a toolbar button that switches between local time and UTC.
+A second page, `http://localhost:3000/examples/clock.html`, shows a day of deploys, jobs and incidents on the [clock time scale](#clock-time-scale), with a toolbar menu that shows the times in local time, UTC, New York or Tokyo.
 
 A third, `http://localhost:3000/examples/live.html`, shows [live mode](#live-mode): a made-up feed of deploys, jobs, errors and alerts, streamed from the example server's `/events` endpoint, with the view following the current time.
 
@@ -92,8 +92,8 @@ Ids must be unique. If two events end up with the same id, whether given or gene
 | ------------------- | -------------------- | -------- | ------- | ----- |
 | `events`            | `object[]`           | no       | `[]`    | Array of events. See [Event fields](#event-fields). |
 | `timeScale`         | `'historical' \| 'clock'` | no  | `'historical'` | `'historical'` for years, months and days, BCE included. `'clock'` for timelines measured in days, hours, minutes and seconds. See [Historical time scale](#historical-time-scale) and [Clock time scale](#clock-time-scale). |
-| `timeZone`          | `'local' \| 'UTC'`   | no       | `'local'` | Clock scale only: the zone times are shown in, and offset-free strings read in. See [Time zones](#time-zones). |
-| `timeZones`         | `string[]`           | no       | N/A     | Clock scale only: the zones a toolbar button switches between, e.g. `['local', 'UTC']`. No button when omitted. See [Time zones](#time-zones). |
+| `timeZone`          | `string`             | no       | `'local'` | Clock scale only: the zone times are shown in, and offset-free strings read in: `'local'`, `'UTC'` or an IANA name such as `'Asia/Tokyo'`. See [Time zones](#time-zones). |
+| `timeZones`         | `string[]`           | no       | N/A     | Clock scale only: the zones the viewer can switch between, e.g. `['local', 'UTC']` for a toolbar button, or three or more for a menu. No control when omitted. See [Time zones](#time-zones). |
 | `onTimeZoneChange`  | `function(timeZone)` | no       | N/A     | Called with the new zone's name when the time zone changes. |
 | `follow`            | `boolean`            | no       | N/A     | Clock scale only: start following the current time (`true`) or not (`false`). Either value adds a **● Live** toolbar button. See [Following now](#following-now). |
 | `onFollowChange`    | `function(following)` | no      | N/A     | Called with `true` or `false` when following starts or stops. |
@@ -183,7 +183,7 @@ new Chroniko('#timeline', {
 ```
 
 - **Dates** are epoch ms, `Date` objects or ISO strings: `"2026-11-04"`, `"2026-11-04T09:02"`, `"2026-11-04T09:02:30.250Z"`, `"2026-11-04 09:02+08:00"`.
-- **Strings with `Z` or an offset are exact.** Strings without one, including date-only strings, are read in the [time zone](#time-zones), which is the viewer's local time unless you choose UTC. This differs from JavaScript, which reads `"2026-11-04"` as UTC midnight. For data from servers, prefer epoch ms or strings with an offset, so every viewer sees the same instant.
+- **Strings with `Z` or an offset are exact.** Strings without one, including date-only strings, are read in the [time zone](#time-zones), which is the viewer's local time unless you choose another. This differs from JavaScript, which reads `"2026-11-04"` as UTC midnight. For data from servers, prefer epoch ms or strings with an offset, so every viewer sees the same instant.
 - **Times are shown in the time zone**, on a 24-hour clock. The axis names the zone, e.g. `GMT+8` or `UTC`, so screenshots aren't ambiguous.
 - **Precision** comes from the input: a date, minutes, seconds or ms (for numbers and `Date`s). The story shows times at that precision, and "lasted …" uses the coarser of the two, e.g. "11 minutes, 35 seconds".
 - **Range ends:** a timed `end` is the instant itself. A date-only `end` covers that whole day, like an all-day calendar event.
@@ -194,24 +194,27 @@ new Chroniko('#timeline', {
 
 #### Time zones
 
-Times are shown in the viewer's local time by default. To show them in UTC, for example to compare with server logs, set `timeZone`. To let the viewer switch, list the zones in `timeZones`:
+Times are shown in the viewer's local time by default. To show them in another zone, set `timeZone`: `'UTC'`, for example to compare with server logs, or an IANA name such as `'Asia/Tokyo'` for a venue's time or a region's business hours. To let the viewer switch, list the zones in `timeZones`:
 
 ```js
 const timeline = new Chroniko('#timeline', {
   timeScale: 'clock',
   events,
-  timeZone: 'UTC',               // 'local' (default) or 'UTC'
-  timeZones: ['local', 'UTC'],   // adds a toolbar button
+  timeZone: 'America/New_York',  // 'local' (default), 'UTC' or an IANA name
+  timeZones: ['local', 'UTC', 'America/New_York', 'Asia/Tokyo'],  // adds a toolbar menu
   onTimeZoneChange: (tz) => console.log(tz),
 });
-timeline.setTimeZone('local');
-timeline.getTimeZone();          // 'local'
+timeline.setTimeZone('Asia/Tokyo');
+timeline.getTimeZone();          // 'Asia/Tokyo'
 ```
 
-- **The toolbar button** shows the zone in use, "Local time" or "UTC", and switches to the next zone in `timeZones`. Without `timeZones` there is no button, but `setTimeZone` still works.
+- **The toolbar control** shows the zone in use. With two zones in `timeZones` it's a button that switches to the other; with three or more, a menu. A zone in use that isn't listed, set by `setTimeZone` or a [shared link](#sharing), joins the menu while it's in use. Without `timeZones` there is no control, but `setTimeZone` still works.
+- **Zone names come from the browser,** in the timeline's [language](#languages), with the offset in force now: "Japan Standard Time (GMT+9)", or "日本標準時 (GMT+9)" in Japanese. The name stays the same all year ("Eastern Time", not "Eastern Daylight Time"). Two zones with the same name get their city too, e.g. "Eastern Time, Toronto (GMT-5)", and a zone the browser has no name for shows only its offset, e.g. "GMT-9" for `'Etc/GMT+9'`. `'local'` and `'UTC'` show as "Local time" and "UTC".
+- **IANA names** are checked by the browser's `Intl`, so a name it doesn't know throws. Aliases such as `'US/Eastern'` work, and keep the name you gave in `getTimeZone()`, `getState()`, the URL and `onTimeZoneChange`; the capitalisation is corrected (`'asia/tokyo'` becomes `'Asia/Tokyo'`). Names the browser reads as UTC, such as `'Etc/UTC'`, are `'UTC'`. Listing two names for the same zone in `timeZones` throws.
+- **Daylight saving changes** follow the zone, wherever the viewer is: a day with a change is 23 or 25 hours wide on the axis, also in zones that change by half an hour.
 - **Switching zones moves no event** and keeps the view. The axis, the story and the tooltips are labelled again in the new zone, and `onTimeZoneChange` is called.
 - **Offset-free strings are read in the zone in use when they're added**, and keep that instant afterwards. So `"2026-11-04"` added in local time stays at local midnight, and after switching to UTC it starts at, say, 16:00 the day before for a viewer in Hong Kong. Its tooltip and story card then show the time as well, e.g. "3 Nov 2026, 16:00", since the bare date would be a day off. Use epoch ms or strings with an offset if events must not depend on the zone.
-- **Only `'local'` and `'UTC'` are supported** in this version. Other values, such as `'Asia/Tokyo'`, throw. `timeZone` and `timeZones` with the historical scale throw too, since historical dates have no time of day.
+- `timeZone` and `timeZones` with the historical scale throw, since historical dates have no time of day.
 
 ### Live mode
 
@@ -312,6 +315,18 @@ source: (api) => {
 - To combine several streams, open them all in one source, and return one cleanup that closes them all. Their events share one set of ids.
 - `npm start` serves a demo stream at `/events`; see [`scripts/serve.js`](scripts/serve.js) and [`examples/live.html`](examples/live.html).
 
+#### Reconnecting
+
+Chroniko can't tell when a source's connection drops, so it's up to the source to catch up when it comes back. This matters most for [running events](#running-events): if the message that closes one is lost while the connection is down, its bar keeps growing and its row stays taken, and since running events are never dropped by `retain` or `maxEvents`, it stays for as long as the page is open.
+
+After reconnecting, a source should:
+
+1. **Get the current state** from its server, such as the events from the last few minutes and those still running.
+2. **Close or remove the running events that have ended:** `api.update(id, { end, running: false })` if the server knows the end, otherwise `api.remove(id)`. The source has to remember which events it added as running; Chroniko doesn't list them.
+3. **Add only the events it doesn't have.** `api.add` throws on an id that's already there, so skip those, or pass them to `api.update` if they may have changed.
+
+Server-Sent Events reconnect by themselves, and the `Last-Event-ID` header lets a server send what was missed, if it keeps that long. The demo server keeps a page's feed for a minute after it disconnects. After that it starts a new feed, which begins with a `reset` message, and [`examples/live.html`](examples/live.html) then removes the running events whose ends won't come.
+
 #### Performance
 
 Measured with the live example's feed at 20 new events a second, a few hundred of them running at any time, `maxEvents: 5000`, and the view following now at a 5-minute span, so all 5,000 events are in view. Headless Chromium 136, without a GPU, on a laptop with an Intel Core i7-12700H:
@@ -326,6 +341,7 @@ Measured with the live example's feed at 20 new events a second, a few hundred o
 - Following and panning move the lanes, axis and grid together with one CSS transform, so events don't have to be moved one by one as time passes. Events, labels and tooltips are only redrawn when they change.
 - Every event in view has a button, so frame time grows with the number of events in view, not the number kept. To keep a busy feed fast, zoom in, or limit what's kept with `retain` and `maxEvents`.
 - These are one machine's results. A slower device, or many more events in view, will take longer per frame.
+- An [IANA time zone](#time-zones) costs about the same as local time. Its offsets come from `Intl` and are remembered, so a frame or 5,000 offset-free strings take about as long to work out as in local time.
 
 ### Sharing
 
@@ -338,7 +354,7 @@ With `syncUrl: true`, the timeline keeps this state in the URL hash, so the addr
 ```
 
 - Opening the link restores the view, selection and hidden categories. Editing the hash on an open page applies it too.
-- On the clock scale the hash also has the time zone, e.g. `ck-tz=UTC`, so a link opens in the sender's zone.
+- On the clock scale the hash also has the time zone, e.g. `ck-tz=UTC` or `ck-tz=Asia/Tokyo`, so a link opens in the sender's zone.
 - While the view is following now, the hash has `ck-live=<span in ms>` instead of `ck-view`, e.g. `#ck-live=600000&ck-tz=UTC`, so it isn't rewritten as time passes. Opening such a link follows now at that span.
 - The URL is updated with `history.replaceState` shortly after each change, so it doesn't fill the back-button history. Loading the page doesn't change the URL.
 - Other hash parameters are kept, but the hash no longer works as a plain `#section` anchor once the timeline writes to it. Use `syncUrl` on one timeline per page.

@@ -26,6 +26,9 @@ const gap = (rate) => (-Math.log(1 - Math.random()) / rate) * SECOND;
  * timeline doesn't start empty. Returns { setRate(rate), stop() }.
  */
 export function createFeed(send, { rate = 2, history = 5 * MINUTE } = {}) {
+  // Ids are unique to this feed (ev-k3x9-1, ev-k3x9-2, …), so a page that
+  // reconnects to a new feed never gets an id it already has.
+  const feedId = Math.random().toString(36).slice(2, 6);
   let count = 0;
   let timer = 0;
   const open = new Map(); // id → the timer that finishes it
@@ -44,7 +47,7 @@ export function createFeed(send, { rate = 2, history = 5 * MINUTE } = {}) {
 
   function emit(at = Date.now()) {
     at = Math.round(at);
-    const id = `ev-${++count}`;
+    const id = `ev-${feedId}-${++count}`;
     const service = pick(services);
     const roll = Math.random();
     if (roll < 0.12) {

@@ -29,6 +29,10 @@ const types = {
 // sends its history only when it starts, and what it sends between
 // connections is queued and sent on the next one, so running events still
 // get their ends.
+//
+// A new feed starts with a `reset` event (data: {}). On a reconnect after
+// the old feed is gone (KEEP_MS passed, or the server restarted), it tells
+// the page that the ends of its running events were lost; see live.html.
 
 const KEEP_MS = 60_000;
 const PING_MS = 15_000; // a comment now and then keeps proxies from closing the stream
@@ -54,6 +58,7 @@ function events(req, res, params) {
   } else {
     client = { res, queue: [], idle: 0 };
     clients.set(id, client);
+    res.write('event: reset\ndata: {}\n\n');
     const c = client;
     c.feed = createFeed((op, data) => {
       const message = `event: ${op}\ndata: ${JSON.stringify(data)}\n\n`;

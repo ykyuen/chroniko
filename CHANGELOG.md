@@ -4,6 +4,23 @@ All notable changes to Chroniko are documented in this file. The format is based
 
 ## [Unreleased]
 
+### Added
+
+- Any IANA time zone on the clock scale, e.g. `timeZone: 'Asia/Tokyo'`, for a venue's time or a region's business hours. `timeZone`, `timeZones`, `setTimeZone`, `setState` and the URL's `ck-tz` take any name the browser's `Intl` knows, aliases such as `'US/Eastern'` included; an unknown name throws. A zone keeps the name it was given, with its capitalisation corrected, and names `Intl` reads as UTC, such as `'Etc/UTC'`, are `'UTC'`. Times, axis ticks and daylight saving changes follow the zone wherever the viewer is. See the README's "Time zones" section.
+- With three or more `timeZones`, the toolbar shows a menu instead of a button. IANA zones are named by `Intl` in the timeline's language, with their current offset, e.g. "Japan Standard Time (GMT+9)", in the menu and on the button. A new `timeZone` string in all 13 languages labels the menu, and `uiText` can override it.
+- A README section, "Reconnecting", on catching up after a source's connection drops, so a running event whose end was lost doesn't grow forever.
+
+### Changed
+
+- `timeZones` throws when it lists two names for the same zone, e.g. `'US/Eastern'` and `'America/New_York'`.
+- The URL's `ck-tz` leaves the `/` in IANA names unescaped, e.g. `ck-tz=Asia/Tokyo`. Links with `Asia%2FTokyo` still open.
+- The clock and live examples have a time zone menu of local time, UTC, New York and Tokyo.
+- The live example removes its running events when the demo server starts a new feed after a long disconnect, since their ends won't come. The server marks a new feed with a `reset` message, and gives each feed its own ids, so a new feed never repeats an id the page has.
+
+### Fixed
+
+- On a night the clocks change by half an hour, as on Lord Howe Island, the axis no longer shows an extra tick at the half hour: hourly ticks go from 01:00 to 03:00 instead of 01:00, 02:30, 03:00.
+
 ## [0.7.1] - 2026-11-20
 
 ### Changed

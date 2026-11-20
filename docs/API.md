@@ -5,6 +5,9 @@ This page covers everything Chroniko exports: the `Chroniko` class, its options 
 > [!NOTE]
 > New features by version:
 >
+> - **0.8.0**
+>   - IANA [time zones](#time-zones), such as `'Asia/Tokyo'`, in `timeZone`, `timeZones`, [`setTimeZone`](#settimezonetimezone), [`setState`](#setstatestate) and `ck-tz`.
+>   - A toolbar menu for three or more `timeZones`, and the `timeZone` UI string, its label.
 > - **0.7.0**
 >   - [Live mode](#live-mode): the [`follow`, `onFollowChange`, `retain`, `maxEvents` and `source`](#options) options, and [`running`](#event-object) events.
 >   - [`follow`](#followon) and [`isFollowing`](#isfollowing).
@@ -111,8 +114,8 @@ Every option is optional.
 | ------------------- | -------------------- | ------- | ----------- |
 | `events`            | `object[]`           | `[]`    | The events to show. See [Event object](#event-object). |
 | `timeScale`         | `'historical' \| 'clock'` | `'historical'` | How dates are read and shown. See [Dates](#dates). Any other value throws. |
-| `timeZone`          | `'local' \| 'UTC'`   | `'local'` | Clock scale only. The zone times are shown in, and offset-free strings read in. See [Time zones](#time-zones). |
-| `timeZones`         | `string[]`           | —       | Clock scale only. Two or more zones for a toolbar button to switch between, e.g. `['local', 'UTC']`. No button when omitted. |
+| `timeZone`          | `string`             | `'local'` | Clock scale only. The zone times are shown in, and offset-free strings read in: `'local'`, `'UTC'` or an IANA name such as `'Asia/Tokyo'` (*since 0.8.0*). See [Time zones](#time-zones). |
+| `timeZones`         | `string[]`           | —       | Clock scale only. Two or more zones for the viewer to switch between: two give a toolbar button, e.g. `['local', 'UTC']`, and three or more a menu (*since 0.8.0*). No control when omitted. Two names for the same zone throw. |
 | `onTimeZoneChange`  | `(timeZone: string) => void` | — | Called when the time zone changes. See [Callbacks](#callbacks). |
 | `follow`            | `boolean`            | —       | Clock scale only. Start [following now](#following-now) (`true`) or not (`false`). Either value adds the **● Live** toolbar button. *Since 0.7.0.* |
 | `onFollowChange`    | `(following: boolean) => void` | — | Called when following starts or stops. See [Callbacks](#callbacks). *Since 0.7.0.* |
@@ -207,17 +210,19 @@ Internally, and in [`getState()`](#getstate), positions on the timeline are **ep
 
 ### Time zones
 
-On the clock scale, times are shown in one of two zones:
+On the clock scale, times are shown in one zone at a time:
 
-| Zone      | Shown as | Axis label |
-| --------- | -------- | ---------- |
-| `'local'` | The viewer's own time zone, with its daylight saving changes. | e.g. `GMT+8`, `GMT-4`, `GMT+5:30` |
-| `'UTC'`   | Coordinated Universal Time, the same for every viewer. | `UTC` |
+| Zone      | Shown as | Axis label | Toolbar text |
+| --------- | -------- | ---------- | ------------ |
+| `'local'` | The viewer's own time zone, with its daylight saving changes. | e.g. `GMT+8`, `GMT-4`, `GMT+5:30` | "Local time" (the `localTime` UI string) |
+| `'UTC'`   | Coordinated Universal Time, the same for every viewer. | `UTC` | "UTC" |
+| An IANA name, e.g. `'Asia/Tokyo'` (*since 0.8.0*) | That zone, with its daylight saving changes, wherever the viewer is. | e.g. `GMT+9`, or `GMT-4 – GMT-5` for a view across a change | Intl's name and the offset now, e.g. "Japan Standard Time (GMT+9)" |
 
-- Set the zone with the `timeZone` option or [`setTimeZone()`](#settimezonetimezone). With `timeZones`, a toolbar button shows the zone in use ("Local time" or "UTC") and switches to the next one in the list, wrapping around.
+- Set the zone with the `timeZone` option or [`setTimeZone()`](#settimezonetimezone). With two `timeZones`, a toolbar button shows the zone in use and switches to the other one. With three or more, a menu (`<select class="ck-zone-toggle ck-zone-select">`) lists them, labelled by the `timeZone` UI string. A zone in use that isn't listed has an option of its own while it's in use; an alias of a listed zone selects that zone.
+- IANA names are checked with `Intl.DateTimeFormat`, so a name it doesn't recognise throws. An alias (`'US/Eastern'`) keeps the name given, with Intl's capitalisation if it only differs in case (`'asia/tokyo'` becomes `'Asia/Tokyo'`); that name is what `getTimeZone()`, `getState()`, `ck-tz` and `onTimeZoneChange` give. Names Intl reads as UTC (`'Etc/UTC'`, `'GMT'`) are `'UTC'`.
+- An IANA zone's toolbar text is Intl's generic name in the timeline's `language`, the same all year, with the offset when the control was last updated (at construction and on each zone change). Zones in the list with the same name also get their city, e.g. "Eastern Time, Toronto (GMT-5)"; a zone Intl has no name for, such as `'Etc/GMT+9'`, shows only its offset.
 - Changing the zone moves no event and keeps the view. Only the axis, the story and the tooltips change.
 - A string without `Z` or an offset is read in the zone in use when it's added (by the `events` option, `setEvents`, `addEvents`, or an `updateEvent` patch that contains that date), and keeps that instant when the zone changes. For example, `"2026-11-04"` added in local time in Hong Kong stays at 16:00 UTC on 3 November, and so starts at that time after switching to UTC. A date-only value shown in a zone other than the one it was read in gets its time in tooltips and the story, e.g. "3 Nov 2026, 16:00", and a date-only `end` shows the instant the range stops, e.g. "4 Nov 2026, 16:00". `start`, `end`, `zoomTo` and `setState` read such strings in the zone in use too.
-- Other zone names, such as IANA names like `'Asia/Tokyo'`, throw in this version.
 - The exported [date helpers](#date-helpers) always use local time.
 
 ## Live mode
@@ -284,6 +289,7 @@ The `source` option is called once, at the end of the constructor, with:
 - After `destroy()`, `api` calls do nothing and return `undefined`.
 - If the source throws, the timeline is removed and the constructor throws that error.
 - Chroniko has no transport of its own. The [README](../README.md#sources) has WebSocket and polling examples.
+- Chroniko doesn't know when a source's connection drops. After a reconnect, the source should get the current state, close or remove the running events that have ended (a lost end leaves a running bar growing for as long as the page is open), and add only the events it doesn't have, since `add` throws on an existing id. See [Reconnecting](../README.md#reconnecting) in the README.
 
 ## Methods
 
@@ -417,15 +423,15 @@ Shows times in another zone.
 
 | Parameter  | Type                | Description |
 | ---------- | ------------------- | ----------- |
-| `timeZone` | `'local' \| 'UTC'` | The zone to show. It doesn't have to be listed in `timeZones`. |
+| `timeZone` | `string`            | `'local'`, `'UTC'` or an IANA name such as `'Asia/Tokyo'`. It doesn't have to be listed in `timeZones`. |
 
 Events and the view stay where they are; the axis, story and tooltips are labelled again. Calls [`onTimeZoneChange`](#ontimezonechangetimezone) if the zone changed, and with `syncUrl` updates the URL.
 
-**Throws:** on the historical scale, or if `timeZone` isn't `'local'` or `'UTC'`.
+**Throws:** on the historical scale, or if `timeZone` isn't `'local'`, `'UTC'` or a zone Intl knows.
 
 #### `getTimeZone()`
 
-**Returns:** the zone in use, `'local'` or `'UTC'`, or `null` on the historical scale.
+**Returns:** the zone in use, `'local'`, `'UTC'` or an IANA name as given, or `null` on the historical scale.
 
 ### Following
 
@@ -477,7 +483,7 @@ Deselects every event.
   end: number;        // right edge of the view, in fractional years (epoch ms on the clock scale)
   selected: string[]; // selected ids, in chronological order
   hidden: string[];   // hidden categories
-  timeZone?: string;  // clock scale only: 'local' or 'UTC'
+  timeZone?: string;  // clock scale only: 'local', 'UTC' or an IANA name
   following?: boolean; // clock scale only: whether the view is following now
 }
 ```
@@ -522,9 +528,9 @@ Called with the selected [event objects](#event-object), in chronological order,
 
 ### `onTimeZoneChange(timeZone)`
 
-Called with the new zone's name, `'local'` or `'UTC'`, whenever the [time zone](#time-zones) changes. That includes:
+Called with the new zone's name, `'local'`, `'UTC'` or an IANA name, whenever the [time zone](#time-zones) changes. That includes:
 
-- clicking the time zone button in the toolbar;
+- the time zone button or menu in the toolbar;
 - calling `setTimeZone` or `setState`;
 - the URL hash changing while `syncUrl` is on.
 
@@ -639,7 +645,7 @@ With `syncUrl: true`, the state is kept in the URL hash like this:
 | `ck-view` | `start,end` in fractional years, or epoch ms on the clock scale. |
 | `ck-sel`  | Selected ids, separated by commas. |
 | `ck-hide` | Hidden categories, separated by commas. |
-| `ck-tz`   | Clock scale only: the time zone, `local` or `UTC`. It's always written, so a link opens in the sender's zone even if the page's default differs. An unknown zone is ignored. |
+| `ck-tz`   | Clock scale only: the time zone, e.g. `local`, `UTC` or `Asia/Tokyo` (the `/` isn't escaped; other characters are, e.g. `Etc/GMT%2B9`). It's always written, so a link opens in the sender's zone even if the page's default differs. An unknown zone is ignored. |
 | `ck-live` | Clock scale only: written instead of `ck-view` while the view is [following now](#following-now), as the view's span in ms, e.g. `ck-live=600000`. The view moves as time passes but the span doesn't, so the URL isn't rewritten all the time. Opening the link follows now at that span. It wins over `ck-view`, and a value that isn't a positive number is ignored. *Since 0.7.0.* |
 
 - The hash is updated with `history.replaceState` shortly after each change, so it doesn't add entries to the browser history.
@@ -672,8 +678,8 @@ Every error is an `Error` whose message starts with `Chroniko:`. Any method that
 
 | Thrown by | When |
 | --------- | ---- |
-| Constructor | The container isn't found; `timeScale` isn't `'historical'` or `'clock'`; `timeZone` or `timeZones` is given with the historical scale; `timeZone` isn't `'local'` or `'UTC'`; `timeZones` isn't an array of two or more of those, or lists one twice; `storyPosition` isn't `'below'` or `'right'`; `split` isn't between 0 and 1; `language` is unknown; `follow` or `retain` is given with the historical scale; `retain` isn't a positive number; `maxEvents` isn't a positive whole number; `source` isn't a function. |
-| `setTimeZone`, `setState` | On the historical scale; the zone isn't `'local'` or `'UTC'`. |
+| Constructor | The container isn't found; `timeScale` isn't `'historical'` or `'clock'`; `timeZone` or `timeZones` is given with the historical scale; `timeZone` isn't `'local'`, `'UTC'` or a zone Intl knows; `timeZones` isn't an array of two or more of those, or lists one zone twice, also by two names (`'US/Eastern'` and `'America/New_York'`); `storyPosition` isn't `'below'` or `'right'`; `split` isn't between 0 and 1; `language` is unknown; `follow` or `retain` is given with the historical scale; `retain` isn't a positive number; `maxEvents` isn't a positive whole number; `source` isn't a function. |
+| `setTimeZone`, `setState` | On the historical scale; the zone isn't `'local'`, `'UTC'` or a zone Intl knows. |
 | `follow` | On the historical scale. |
 | `setState` | `following` is given on the historical scale, or isn't `true` or `false`. |
 | Constructor, `setEvents`, `addEvents` | An event isn't an object (e.g. `null`); an event has no `start` or an invalid date; it ends before it starts; `running` isn't `true` or `false`, is `true` on the historical scale, or comes with an `end`; two events share an id. |
