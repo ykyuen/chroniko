@@ -9,6 +9,7 @@ export default {
   largerText: 'Grotere tekst',
   localTime: 'Lokale tijd',
   switchTimeZone: (current, next) => `${current} (tijdzone). Wisselen naar: ${next}`,
+  timeZone: 'Tijdzone',
   live: 'Live',
   followNow: (live) => `${live}: volg de huidige tijd`,
   categories: 'Categorieën',

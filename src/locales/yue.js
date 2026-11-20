@@ -9,6 +9,7 @@ export default {
   largerText: '大啲字',
   localTime: '本地時間',
   switchTimeZone: (current, next) => `時區：${current}。轉去${next}`,
+  timeZone: '時區',
   live: '即時',
   followNow: (live) => `${live}：畫面跟住而家嘅時間`,
   categories: '類別',

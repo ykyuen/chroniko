@@ -162,8 +162,9 @@ export class Chroniko {
    *                                    in this zone. An IANA name keeps the alias given ('US/Eastern') and
    *                                    gets Intl's capitalisation; a name Intl doesn't know throws.
    * @param {string[]} [options.timeZones] Clock scale only: the zones a toolbar control switches between,
-   *                                    e.g. ['local', 'UTC'] for a toggle button. No control when omitted.
-   *                                    Two names for the same zone throw.
+   *                                    e.g. ['local', 'UTC'] for a toggle button. Three or more give a menu
+   *                                    (<select>). IANA zones are shown by Intl's name in the language, with
+   *                                    their offset. No control when omitted. Two names for the same zone throw.
    * @param {Function} [options.onTimeZoneChange] Called with the new time zone's name when it changes.
    * @param {boolean} [options.follow] Clock scale only: start following now (true) or not (false), which
    *                                    keeps now near the view's right edge as time passes. Panning stops it;
@@ -736,7 +737,8 @@ export class Chroniko {
             <div class="ck-legend" role="group" aria-label="${esc(m.categories)}"></div>
             <div class="ck-controls">
               ${this.options.follow != null ? `<button type="button" data-action="live" class="ck-live" aria-pressed="false" aria-label="${esc(m.followNow(m.live))}"><span class="ck-live-dot"></span>${esc(m.live)}</button>` : ''}
-              ${this._zones ? '<button type="button" data-action="time-zone" class="ck-zone-toggle"></button>' : ''}
+              ${this._zones?.length === 2 ? '<button type="button" data-action="time-zone" class="ck-zone-toggle"></button>' : ''}
+              ${this._zones?.length > 2 ? `<select class="ck-zone-toggle ck-zone-select" aria-label="${esc(m.timeZone)}"></select>` : ''}
               <button type="button" data-action="zoom-in" aria-label="${esc(m.zoomIn)}">+</button>
               <button type="button" data-action="zoom-out" aria-label="${esc(m.zoomOut)}">−</button>
               <button type="button" data-action="fit">${esc(m.fit)}</button>
@@ -807,6 +809,11 @@ export class Chroniko {
       else if (action === 'time-zone') this.setTimeZone(this._nextZone());
       else if (action === 'live') this.follow(!this._following);
     });
+
+    if (this._zones?.length > 2) {
+      const select = this.zoneToggleEl;
+      select.addEventListener('change', () => this.setTimeZone(select.value));
+    }
 
     this.tagbarEl.addEventListener('click', (e) => {
       const tag = e.target.closest('.ck-tag');
@@ -1064,19 +1071,48 @@ export class Chroniko {
     return zones[(zones.findIndex((z) => sameZone(z, this.scale.zone)) + 1) % zones.length].name;
   }
 
-  _zoneText(name) {
-    return name === 'local' ? this.m.localTime : name;
+  // The zones the toolbar offers, with the text each is shown by: those in
+  // timeZones, then the zone in use if it isn't one of them (set through
+  // setTimeZone or the URL). IANA zones go by Intl's name in the timeline's
+  // language and their offset now, e.g. "Japan Standard Time (GMT+9)"; two
+  // with the same name also get their place ("Eastern Time, Toronto (GMT-4)").
+  _zoneChoices() {
+    const zones = [...this._zones];
+    if (!zones.some((z) => sameZone(z, this.scale.zone))) zones.push(this.scale.zone);
+    const now = Date.now();
+    const names = zones.map((zone) => zone.displayName?.(this.options.language, now));
+    return zones.map((zone, i) => {
+      if (zone.name === 'local') return { zone, text: this.m.localTime };
+      if (!zone.id) return { zone, text: zone.name }; // UTC
+      const offset = zone.offsetLabel(now);
+      const name = names[i];
+      if (!name) return { zone, text: offset };
+      const place = zone.name.split('/').pop().replaceAll('_', ' ');
+      const shared = names.filter((n) => n === name).length > 1;
+      return { zone, text: shared ? `${name}, ${place} (${offset})` : `${name} (${offset})` };
+    });
   }
 
-  // The toggle shows the zone in use. Its label, which is also its tooltip,
-  // starts with that text, so speech input can still find it by what it shows.
-  // setAttribute and textContent don't parse HTML, so nothing is escaped here.
+  // The toolbar control shows the zone in use: a toggle button for two zones,
+  // a <select> for more. The button's label, which is also its tooltip,
+  // starts with the text it shows, so speech input can still find it by that.
+  // setAttribute and textContent don't parse HTML, so they aren't escaped;
+  // the options are markup, so they are.
   _syncZoneToggle() {
-    const button = this.zoneToggleEl;
-    if (!button) return;
-    const current = this._zoneText(this.scale.zone.name);
-    button.textContent = current;
-    button.setAttribute('aria-label', this.m.switchTimeZone(current, this._zoneText(this._nextZone())));
+    const el = this.zoneToggleEl;
+    if (!el) return;
+    const choices = this._zoneChoices();
+    const textOf = (zone) => choices.find((c) => sameZone(c.zone, zone)).text;
+    const current = textOf(this.scale.zone);
+    if (this._zones.length === 2) {
+      el.textContent = current;
+      el.setAttribute('aria-label', this.m.switchTimeZone(current, textOf(zoneNamed(this._nextZone()))));
+      return;
+    }
+    el.innerHTML = choices
+      .map(({ zone, text }) => `<option value="${esc(zone.name)}"${sameZone(zone, this.scale.zone) ? ' selected' : ''}>${esc(text)}</option>`)
+      .join('');
+    el.value = choices.find((c) => sameZone(c.zone, this.scale.zone)).zone.name;
   }
 
   // Label widths are cached for lane packing, and a size change fires neither

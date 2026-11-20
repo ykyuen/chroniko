@@ -153,6 +153,17 @@ function ianaZone(name, id) {
     offsetLabel(ms) {
       return gmtLabel(offset(ms) / 60_000);
     },
+
+    /**
+     * Intl's name for the zone in a language, the same all year ("Eastern
+     * Time", not "Eastern Daylight Time"), or null where Intl has only an
+     * offset for it ("GMT-09:00" for 'Etc/GMT+9').
+     */
+    displayName(language, ms) {
+      const parts = new Intl.DateTimeFormat(language, { timeZone: id, timeZoneName: 'longGeneric' }).formatToParts(ms);
+      const value = parts.find((p) => p.type === 'timeZoneName')?.value;
+      return !value || /^(GMT|UTC)([+\-−]|$)/.test(value) ? null : value;
+    },
   };
 }
 

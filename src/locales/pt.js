@@ -9,6 +9,7 @@ export default {
   largerText: 'Texto maior',
   localTime: 'Hora local',
   switchTimeZone: (current, next) => `${current} (fuso horário). Mudar para: ${next}`,
+  timeZone: 'Fuso horário',
   live: 'Ao vivo',
   followNow: (live) => `${live}: acompanhar a hora atual`,
   categories: 'Categorias',

@@ -8,6 +8,7 @@ export default {
   largerText: '放大文字',
   localTime: '本地時間',
   switchTimeZone: (current, next) => `時區：${current}。切換至${next}`,
+  timeZone: '時區',
   live: '即時',
   followNow: (live) => `${live}：讓畫面跟著目前時間`,
   categories: '類別',

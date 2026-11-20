@@ -542,3 +542,73 @@ describe('IANA time zones', () => {
     }
   });
 });
+
+// Three or more zones give a <select>. The fake DOM keeps its options as
+// markup in innerHTML; changing the zone sets value and fires "change".
+describe('the time zone menu', () => {
+  const options = (timeline) => [...timeline.zoneToggleEl.innerHTML.matchAll(/<option value="([^"]*)"( selected)?>([^<]*)<\/option>/g)].map((m) => [m[1], m[3], Boolean(m[2])]);
+  const choose = (timeline, name) => {
+    timeline.zoneToggleEl.value = name;
+    timeline.zoneToggleEl.fire('change');
+  };
+  // Offsets are the ones now; pin now for zones with DST.
+  const at = (t, iso) => t.mock.timers.enable({ apis: ['Date'], now: utc(iso) });
+
+  test('replaces the toggle, names IANA zones with their offset, and marks the zone in use', () => {
+    const timeline = clock({ timeZones: ['local', 'UTC', 'Asia/Tokyo'] });
+    assert.doesNotMatch(timeline.root.innerHTML, /data-action="time-zone"/);
+    assert.match(timeline.root.innerHTML, /<select class="ck-zone-toggle ck-zone-select" aria-label="Time zone">/);
+    assert.deepEqual(options(timeline), [
+      ['local', 'Local time', true],
+      ['UTC', 'UTC', false],
+      ['Asia/Tokyo', 'Japan Standard Time (GMT+9)', false],
+    ]);
+    assert.equal(timeline.zoneToggleEl.value, 'local');
+  });
+
+  test('choosing a zone switches to it', () => {
+    const timeline = clock({ timeZones: ['local', 'UTC', 'Asia/Tokyo'] });
+    choose(timeline, 'Asia/Tokyo');
+    assert.equal(timeline.getTimeZone(), 'Asia/Tokyo');
+    assert.deepEqual(timeline.calls, ['Asia/Tokyo']);
+    assert.deepEqual(options(timeline).map(([name, , selected]) => [name, selected]), [['local', false], ['UTC', false], ['Asia/Tokyo', true]]);
+    assert.equal(timeline.zoneToggleEl.value, 'Asia/Tokyo');
+  });
+
+  test('a zone in use that is not listed gets an option of its own while in use', () => {
+    const timeline = clock({ timeZones: ['local', 'UTC', 'Asia/Tokyo'] });
+    timeline.setTimeZone('Asia/Kolkata');
+    assert.deepEqual(options(timeline).at(-1), ['Asia/Kolkata', 'India Standard Time (GMT+5:30)', true]);
+    choose(timeline, 'UTC');
+    assert.deepEqual(options(timeline).map(([name]) => name), ['local', 'UTC', 'Asia/Tokyo']);
+  });
+
+  test('an alias of a listed zone selects that zone', (t) => {
+    at(t, '2026-01-15T12:00:00Z');
+    const timeline = clock({ timeZones: ['local', 'UTC', 'America/New_York'] });
+    timeline.setTimeZone('US/Eastern');
+    assert.deepEqual(options(timeline).map(([name, , selected]) => [name, selected]), [['local', false], ['UTC', false], ['America/New_York', true]]);
+    assert.equal(timeline.zoneToggleEl.value, 'America/New_York');
+  });
+
+  test('zones with the same name also get their place, and the offset in force now', (t) => {
+    at(t, '2026-07-15T12:00:00Z');
+    const timeline = clock({ timeZone: 'America/New_York', timeZones: ['America/New_York', 'America/Toronto', 'Etc/GMT+9'] });
+    assert.deepEqual(options(timeline).map(([, text]) => text), ['Eastern Time, New York (GMT-4)', 'Eastern Time, Toronto (GMT-4)', 'GMT-9']);
+  });
+
+  test('is translated, and uiText can replace its label', () => {
+    const japanese = clock({ timeZones: ['local', 'UTC', 'Asia/Tokyo'], language: 'ja' });
+    assert.match(japanese.root.innerHTML, /aria-label="タイムゾーン"/);
+    assert.deepEqual(options(japanese).map(([, text]) => text), ['現地時間', 'UTC', '日本標準時 (GMT+9)']);
+    const custom = clock({ timeZones: ['local', 'UTC', 'Asia/Tokyo'], uiText: { timeZone: 'Show times in' } });
+    assert.match(custom.root.innerHTML, /aria-label="Show times in"/);
+  });
+
+  test('the two-zone toggle names IANA zones the same way', () => {
+    const timeline = clock({ timeZones: ['local', 'Asia/Tokyo'] });
+    assert.equal(timeline.zoneToggleEl.getAttribute('aria-label'), 'Local time (time zone). Switch to Japan Standard Time (GMT+9)');
+    clickToggle(timeline);
+    assert.equal(timeline.zoneToggleEl.textContent, 'Japan Standard Time (GMT+9)');
+  });
+});

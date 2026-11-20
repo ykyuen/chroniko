@@ -13,12 +13,15 @@ export default {
   fit: 'Fit',
   dimUnselected: 'Dim unselected events',
   largerText: 'Larger text',
-  // The timeZones toggle shows the zone in use: localTime, or "UTC" as is.
+  // The timeZones control shows the zone in use: localTime, "UTC" as is, or
+  // an IANA zone's name from Intl. With two zones it's a toggle button:
   // switchTimeZone() is its tooltip and accessible label, and gets plain
   // text (not escaped). It must contain the shown zone, best at the start, so
-  // speech input can find the button by what it shows.
+  // speech input can find the button by what it shows. With three or more
+  // it's a menu, and timeZone is the menu's accessible label.
   localTime: 'Local time',
   switchTimeZone: (current, next) => `${current} (time zone). Switch to ${next}`,
+  timeZone: 'Time zone',
   // The Live button, shown with the follow option. followNow() is its tooltip
   // and accessible label, and gets the button's text (plain, not escaped),
   // which it must contain, best at the start, as with switchTimeZone().

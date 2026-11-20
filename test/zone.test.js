@@ -317,6 +317,20 @@ describe('zoneNamed', () => {
     assert.equal(zoneNamed('US/Eastern').id, zoneNamed('America/New_York').id);
   });
 
+  test("IANA zones have Intl's name, the same all year, in the language asked for", () => {
+    const [winter, summer] = [utc('2026-01-15T12:00:00Z'), utc('2026-07-15T12:00:00Z')];
+    assert.equal(zoneNamed('Asia/Tokyo').displayName('en', winter), 'Japan Standard Time');
+    assert.deepEqual([winter, summer].map((t) => zoneNamed('America/New_York').displayName('en', t)), ['Eastern Time', 'Eastern Time']);
+    assert.equal(zoneNamed('Asia/Tokyo').displayName('ja', winter), '日本標準時');
+    assert.equal(zoneNamed('Asia/Tokyo').displayName('zh-Hant', winter), '日本標準時間');
+  });
+
+  test('displayName is null where Intl has only an offset', () => {
+    for (const name of ['Etc/GMT+9', '+09:00']) {
+      for (const language of ['en', 'fr', 'ja']) assert.equal(zoneNamed(name).displayName(language, utc('2026-01-15T12:00:00Z')), null);
+    }
+  });
+
   test('throws for names Intl does not know, and for non-strings', () => {
     for (const name of ['Mars/Olympus_Mons', 'Local', '', null, undefined, 8]) {
       assert.throws(() => zoneNamed(name), /timeZone must be 'local', 'UTC' or an IANA time zone such as 'Asia\/Tokyo'/);

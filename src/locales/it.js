@@ -8,6 +8,7 @@ export default {
   largerText: 'Testo più grande',
   localTime: 'Ora locale',
   switchTimeZone: (current, next) => `${current} (fuso orario). Passa a: ${next}`,
+  timeZone: 'Fuso orario',
   live: 'Live',
   followNow: (live) => `${live}: segui l’ora attuale`,
   categories: 'Categorie',

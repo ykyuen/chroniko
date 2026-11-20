@@ -123,6 +123,26 @@
   color: var(--ck-focus);
 }
 
+/* The timeZones menu (three or more zones), sized like the buttons. Zone
+   names can be long, so it shrinks and truncates on a narrow toolbar. */
+.ck-controls .ck-zone-select {
+  min-width: 0;
+  max-width: 260px;
+  height: 28px;
+  padding: 0 4px;
+  background: var(--ck-bg);
+  color: var(--ck-fg);
+  border: 1px solid var(--ck-border);
+  border-radius: 6px;
+  font: inherit;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.ck-controls .ck-zone-select:hover {
+  border-color: var(--ck-muted);
+}
+
 /* The Live button (follow option): its dot turns the "now" line's colour while following. */
 .ck-controls .ck-live {
   display: inline-flex;
